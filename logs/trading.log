@@ -127,3 +127,8 @@
 2026-07-04 10:32:09 | INFO     | core.risk_manager:139 – [INFY] Trade closed | PnL ₹+1,500.00 | Day P&L ₹+1,500.00 | Consecutive losses: 0
 2026-07-04 10:32:09 | INFO     | core.risk_manager:139 – [TCS] Trade closed | PnL ₹-800.00 | Day P&L ₹+700.00 | Consecutive losses: 1
 2026-07-04 10:32:09 | INFO     | core.risk_manager:55 – Resetting daily risk counters for new session.
+2026-07-04 10:32:15 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:32:39 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:33:39 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:34:39 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:35:39 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
