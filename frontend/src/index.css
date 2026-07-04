@@ -1,0 +1,7 @@
+/* index.css */
+/* Reset any browser defaults and establish base values. App-specific styling is in App.css */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #07080d;
+}

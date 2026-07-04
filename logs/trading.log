@@ -1,0 +1,129 @@
+2026-07-04 10:21:09 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:09 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:10 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:10 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:14 | INFO     | src.data.session_manager:52 – [Session Manager] Initiating SmartAPI authentication...
+2026-07-04 10:21:14 | INFO     | src.data.session_manager:56 – [Session Manager] Log in Client ID: AACJ365506
+2026-07-04 10:21:15 | SUCCESS  | src.data.session_manager:74 – [Session Manager] Successfully logged into Angel One. Client: AACJ365506 | Token Expires at: 2026-07-04 23:59:59
+2026-07-04 10:21:15 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:21:17 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:17 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:18 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:18 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:18 | INFO     | __main__:101 – Core trading components initialized successfully.
+2026-07-04 10:21:18 | INFO     | __main__:110 – Background scanning loop started.
+2026-07-04 10:21:18 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:18 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:19 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:19 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:19 | INFO     | server:101 – Core trading components initialized successfully.
+2026-07-04 10:21:19 | INFO     | server:110 – Background scanning loop started.
+2026-07-04 10:21:24 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:24 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:25 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:25 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:26 | INFO     | src.data.session_manager:52 – [Session Manager] Initiating SmartAPI authentication...
+2026-07-04 10:21:26 | INFO     | src.data.session_manager:56 – [Session Manager] Log in Client ID: AACJ365506
+2026-07-04 10:21:27 | SUCCESS  | src.data.session_manager:74 – [Session Manager] Successfully logged into Angel One. Client: AACJ365506 | Token Expires at: 2026-07-04 23:59:59
+2026-07-04 10:21:27 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:21:27 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:27 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:28 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:28 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:28 | INFO     | __mp_main__:101 – Core trading components initialized successfully.
+2026-07-04 10:21:28 | INFO     | __mp_main__:110 – Background scanning loop started.
+2026-07-04 10:21:29 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:21:29 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:21:30 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:21:30 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:21:30 | INFO     | server:101 – Core trading components initialized successfully.
+2026-07-04 10:21:30 | INFO     | server:110 – Background scanning loop started.
+2026-07-04 10:21:40 | DEBUG    | src.utils.cache:133 – [Cache DataFrame MISS] hist_RELIANCE_15minute_5
+2026-07-04 10:21:40 | DEBUG    | src.utils.cache:133 – [Cache DataFrame MISS] hist_RELIANCE_15minute_5
+2026-07-04 10:21:40 | INFO     | src.data.angel_fetcher:110 – [RELIANCE] Fetching candle chunk 1/1 from 2026-06-29 10:21 to 2026-07-04 10:21
+2026-07-04 10:21:51 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:01 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:11 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:21 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:31 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:41 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:22:51 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:23:01 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:23:11 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:23:21 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:23:31 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:24:32 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:25:33 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:26:13 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:26:24 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:26:34 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:26:40 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:26:40 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:26:41 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:26:41 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:26:42 | INFO     | src.data.session_manager:52 – [Session Manager] Initiating SmartAPI authentication...
+2026-07-04 10:26:42 | INFO     | src.data.session_manager:56 – [Session Manager] Log in Client ID: AACJ365506
+2026-07-04 10:26:43 | SUCCESS  | src.data.session_manager:74 – [Session Manager] Successfully logged into Angel One. Client: AACJ365506 | Token Expires at: 2026-07-04 23:59:59
+2026-07-04 10:26:43 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:26:44 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:26:44 | INFO     | core.order_executor:121 – [PAPER] Direction.LONG 10×RELIANCE @ ₹2800.0 | SL ₹2750.0 | TGT ₹2900.0
+2026-07-04 10:26:47 | DEBUG    | src.utils.rate_limiter:43 – [Test 2] Throttled! Waiting 199ms for rate limiter token.
+2026-07-04 10:26:47 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:26:47 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] test_df
+2026-07-04 10:26:47 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:26:47 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (1/2): Fail
+2026-07-04 10:26:47 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (2/2): Fail
+2026-07-04 10:26:47 | ERROR    | src.utils.circuit_breaker:107 – [Circuit Breaker 'TestCB'] Tripped to OPEN! Blocking API calls for 0.2 seconds.
+2026-07-04 10:26:47 | ERROR    | src.utils.circuit_breaker:75 – [Circuit Breaker 'TestCB'] Call blocked (State: OPEN). Time left: 0s
+2026-07-04 10:26:48 | WARNING  | src.utils.circuit_breaker:73 – [Circuit Breaker 'TestCB'] Transitioning OPEN -> HALF_OPEN. Allowing probe call.
+2026-07-04 10:26:48 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (3/2): Fail
+2026-07-04 10:26:48 | ERROR    | src.utils.circuit_breaker:107 – [Circuit Breaker 'TestCB'] Tripped to OPEN! Blocking API calls for 0.2 seconds.
+2026-07-04 10:26:48 | INFO     | core.risk_manager:139 – [INFY] Trade closed | PnL ₹+1,500.00 | Day P&L ₹+1,500.00 | Consecutive losses: 0
+2026-07-04 10:26:48 | INFO     | core.risk_manager:139 – [TCS] Trade closed | PnL ₹-800.00 | Day P&L ₹+700.00 | Consecutive losses: 1
+2026-07-04 10:26:48 | INFO     | core.risk_manager:55 – Resetting daily risk counters for new session.
+2026-07-04 10:26:54 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:27:04 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:27:35 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:28:36 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:29:19 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:29:23 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:29:34 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:29:44 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:29:54 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:04 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:14 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:14 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:25 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:35 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:45 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:30:55 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:05 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:15 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:25 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:35 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:45 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:31:55 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:32:03 | INFO     | src.data.angel_connector:48 – Initializing Angel One SmartConnect...
+2026-07-04 10:32:03 | INFO     | src.data.angel_connector:54 – Generating session for Client ID: AACJ365506...
+2026-07-04 10:32:04 | SUCCESS  | src.data.angel_connector:62 – Angel One SmartAPI Session generated successfully.
+2026-07-04 10:32:04 | INFO     | src.data.angel_connector:87 – Loaded 19290 instrument mappings from local cache.
+2026-07-04 10:32:05 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] hist_RELIANCE_15minute_5
+2026-07-04 10:32:05 | INFO     | src.data.session_manager:52 – [Session Manager] Initiating SmartAPI authentication...
+2026-07-04 10:32:05 | INFO     | src.data.session_manager:56 – [Session Manager] Log in Client ID: AACJ365506
+2026-07-04 10:32:06 | SUCCESS  | src.data.session_manager:74 – [Session Manager] Successfully logged into Angel One. Client: AACJ365506 | Token Expires at: 2026-07-04 23:59:59
+2026-07-04 10:32:06 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:32:07 | INFO     | core.order_executor:121 – [PAPER] Direction.LONG 10×RELIANCE @ ₹2800.0 | SL ₹2750.0 | TGT ₹2900.0
+2026-07-04 10:32:08 | DEBUG    | src.utils.rate_limiter:43 – [Test 2] Throttled! Waiting 199ms for rate limiter token.
+2026-07-04 10:32:09 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:32:09 | DEBUG    | src.utils.cache:108 – [Cache L1 DataFrame HIT] test_df
+2026-07-04 10:32:09 | INFO     | src.utils.cache:177 – Cleaning expired L2 cache files on startup...
+2026-07-04 10:32:09 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (1/2): Fail
+2026-07-04 10:32:09 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (2/2): Fail
+2026-07-04 10:32:09 | ERROR    | src.utils.circuit_breaker:107 – [Circuit Breaker 'TestCB'] Tripped to OPEN! Blocking API calls for 0.2 seconds.
+2026-07-04 10:32:09 | ERROR    | src.utils.circuit_breaker:75 – [Circuit Breaker 'TestCB'] Call blocked (State: OPEN). Time left: 0s
+2026-07-04 10:32:09 | WARNING  | src.utils.circuit_breaker:73 – [Circuit Breaker 'TestCB'] Transitioning OPEN -> HALF_OPEN. Allowing probe call.
+2026-07-04 10:32:09 | WARNING  | src.utils.circuit_breaker:100 – [Circuit Breaker 'TestCB'] Failure detected (3/2): Fail
+2026-07-04 10:32:09 | ERROR    | src.utils.circuit_breaker:107 – [Circuit Breaker 'TestCB'] Tripped to OPEN! Blocking API calls for 0.2 seconds.
+2026-07-04 10:32:09 | INFO     | core.risk_manager:139 – [INFY] Trade closed | PnL ₹+1,500.00 | Day P&L ₹+1,500.00 | Consecutive losses: 0
+2026-07-04 10:32:09 | INFO     | core.risk_manager:139 – [TCS] Trade closed | PnL ₹-800.00 | Day P&L ₹+700.00 | Consecutive losses: 1
+2026-07-04 10:32:09 | INFO     | core.risk_manager:55 – Resetting daily risk counters for new session.
