@@ -13,13 +13,13 @@ from utils.logger import logger
 
 class ORBStrategy:
     def __init__(self, config: dict):
-        strat = config.get("strategy", {})
-        orb_cfg = config.get("orb", {})
+        strat = config.get("strategy", {}) or {}
+        orb_cfg = config.get("orb", {}) or {}
         
         self.start_time: str = orb_cfg.get("start_time", "09:15")
         self.end_time: str = orb_cfg.get("end_time", "09:30")
         self.volume_period: int = orb_cfg.get("volume_period", 20)
-        self.volume_multiplier: float = orb_cfg.get("volume_multiplier", 1.3)
+        self.volume_multiplier: float = orb_cfg.get("volume_multiplier", 2.0)
         self.use_vwap_filter: bool = orb_cfg.get("use_vwap_filter", True)
         self.target_multiplier: float = orb_cfg.get("target_multiplier", 1.5)
         self.min_range_pct: float = orb_cfg.get("min_range_pct", 0.001)
@@ -47,6 +47,41 @@ class ORBStrategy:
                          (high - prev_close).abs(),
                          (low - prev_close).abs()], axis=1).max(axis=1)
         return tr.rolling(period).mean()
+
+    def _calculate_rsi_15m(self, df: pd.DataFrame, period: int = 14) -> float:
+        """Resample base data to 15-minute timeframe and calculate RSI."""
+        try:
+            # Resample input dataframe (which might be 1m, 3m, 5m etc) to 15m
+            df_15m = df.resample("15min").agg({
+                "open": "first",
+                "high": "max",
+                "low": "min",
+                "close": "last",
+                "volume": "sum"
+            }).dropna()
+            
+            if len(df_15m) < period + 2:
+                # If resampled bars are too few, compute standard RSI on the raw series as fallback
+                df_15m = df
+                
+            delta = df_15m["close"].diff()
+            gain = delta.clip(lower=0)
+            loss = -delta.clip(upper=0)
+            
+            avg_gain = gain.rolling(period).mean()
+            avg_loss = loss.rolling(period).mean()
+            
+            # Wilders smoothing
+            for i in range(period, len(df_15m)):
+                avg_gain.iloc[i] = (avg_gain.iloc[i-1] * (period - 1) + gain.iloc[i]) / period
+                avg_loss.iloc[i] = (avg_loss.iloc[i-1] * (period - 1) + loss.iloc[i]) / period
+                
+            rs = avg_gain / (avg_loss + 1e-9)
+            rsi = 100 - (100 / (1 + rs))
+            return float(rsi.iloc[-1])
+        except Exception as e:
+            logger.warning(f"RSI calculation exception, falling back to neutral: {e}")
+            return 50.0
 
     def calculate_opening_range(self, df_day: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
         """Calculate the ORH and ORL using range window timestamps."""
@@ -127,8 +162,15 @@ class ORBStrategy:
         # Previous bar close to check if breakout just occurred
         prev_close = float(df_day["close"].iloc[-2]) if len(df_day) > 1 else current_close
 
+        # Calculate 15m RSI filter
+        rsi_15m = self._calculate_rsi_15m(df)
+
         # 4. Check for Long Breakout (close crosses above ORH)
         if prev_close <= orh and current_close > orh:
+            # RSI momentum check (55-70 zone for momentum breakouts, capped at 75)
+            if not (55.0 <= rsi_15m <= 70.0):
+                return []
+                
             # VWAP Filter
             if self.use_vwap_filter and current_vwap is not None and current_close <= current_vwap:
                 return []
@@ -151,6 +193,10 @@ class ORBStrategy:
 
         # 5. Check for Short Breakout (close crosses below ORL)
         if prev_close >= orl and current_close < orl:
+            # RSI momentum check (30-45 zone, blocked below 25)
+            if not (30.0 <= rsi_15m <= 45.0):
+                return []
+                
             # VWAP Filter
             if self.use_vwap_filter and current_vwap is not None and current_close >= current_vwap:
                 return []

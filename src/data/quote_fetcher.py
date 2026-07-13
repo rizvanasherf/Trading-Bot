@@ -61,7 +61,7 @@ class BatchQuoteFetcher:
                         "NSE": tokens_to_fetch
                     }
                 }
-                res = connector.smart.marketData(params["mode"], params["exchangeTokens"])
+                res = connector.smart.getMarketData(params["mode"], params["exchangeTokens"])
                 
                 if res.get("status") is True and res.get("data") and "fetched" in res["data"]:
                     fetched_list = res["data"]["fetched"]

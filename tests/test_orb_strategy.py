@@ -86,6 +86,7 @@ def test_generate_signals_long_breakout(orb_config):
         "volume": volumes
     }, index=dates)
     
+    strat._calculate_rsi_15m = lambda df: 60.0
     signals = strat.generate_signals("RELIANCE", df)
     
     assert len(signals) == 1
@@ -123,6 +124,7 @@ def test_generate_signals_short_breakout(orb_config):
         "volume": volumes
     }, index=dates)
     
+    strat._calculate_rsi_15m = lambda df: 35.0
     signals = strat.generate_signals("RELIANCE", df)
     
     assert len(signals) == 1

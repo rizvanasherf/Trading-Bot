@@ -12,8 +12,8 @@ from core.strategy import Direction, Signal
 
 class VWAPPullbackStrategy:
     def __init__(self, config: dict):
-        strat = config.get("strategy", {})
-        vp_cfg = config.get("vwap_pullback", {})
+        strat = config.get("strategy", {}) or {}
+        vp_cfg = config.get("vwap_pullback", {}) or {}
         
         self.ema_period: int = vp_cfg.get("ema_period", 9)
         self.vwap_buffer_pct: float = vp_cfg.get("vwap_buffer_pct", 0.0015)

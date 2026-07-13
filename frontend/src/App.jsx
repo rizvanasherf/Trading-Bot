@@ -246,12 +246,17 @@ export default function App() {
       fetchMetrics();
       fetchPositions();
       fetchTrades();
-      if (activeTab === 'dashboard') {
-        fetchChart();
-      }
     }, 10000);
     return () => clearInterval(timer);
-  }, [activeTab, fetchStatus, fetchDiagnostics, fetchMetrics, fetchPositions, fetchTrades, fetchChart]);
+  }, [fetchStatus, fetchDiagnostics, fetchMetrics, fetchPositions, fetchTrades]);
+
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return;
+    const timer = setInterval(() => {
+      fetchChart();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [activeTab, fetchChart]);
 
   // Load chart when tab is active or selected symbol changes
   useEffect(() => {
@@ -494,13 +499,50 @@ export default function App() {
         </nav>
         
         <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button 
-            className={`mode-badge-btn ${status.trading_mode}`}
-            onClick={toggleMode}
-            title="Click to switch trading mode"
+          <div 
+            onClick={toggleMode} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              background: 'rgba(255,255,255,0.03)', 
+              padding: '10px 14px', 
+              borderRadius: '24px', 
+              cursor: 'pointer', 
+              border: '1px solid rgba(255,255,255,0.08)',
+              userSelect: 'none',
+              transition: 'all 0.2s ease',
+              width: '100%'
+            }}
+            title="Click to toggle trading mode"
           >
-            {status.trading_mode === 'live' ? 'Live Mode' : 'Paper Mode'}
-          </button>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: status.trading_mode === 'paper' ? '#6444e3' : '#8f8c96', transition: 'color 0.2s' }}>Paper</span>
+            
+            <div style={{ 
+              width: '36px', 
+              height: '18px', 
+              background: status.trading_mode === 'live' ? 'rgba(255, 23, 68, 0.15)' : 'rgba(100, 68, 227, 0.15)', 
+              border: status.trading_mode === 'live' ? '1px solid #ff1744' : '1px solid #6444e3',
+              borderRadius: '9px', 
+              position: 'relative', 
+              transition: 'all 0.2s ease',
+              margin: '0 8px'
+            }}>
+              <div style={{ 
+                width: '12px', 
+                height: '12px', 
+                background: status.trading_mode === 'live' ? '#ff1744' : '#6444e3', 
+                borderRadius: '50%', 
+                position: 'absolute', 
+                top: '2px', 
+                left: status.trading_mode === 'live' ? '20px' : '2px', 
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: status.trading_mode === 'live' ? '0 0 8px #ff1744' : '0 0 8px #6444e3'
+              }} />
+            </div>
+            
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: status.trading_mode === 'live' ? '#ff1744' : '#8f8c96', transition: 'color 0.2s' }}>Live</span>
+          </div>
           <button 
             className="btn"
             onClick={triggerPanicClose}

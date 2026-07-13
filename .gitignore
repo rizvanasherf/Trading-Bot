@@ -68,9 +68,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Logs and Data Caches (Contains tokens and temp tick data)
-logs/*.json
-logs/*.parquet
+# Logs, Data Caches, and Trade History
+logs/
 *.log
 *.sqlite
 
