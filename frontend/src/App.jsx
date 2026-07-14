@@ -1805,7 +1805,7 @@ export default function App() {
 
         {/* TAB 5: Data Analysis Dashboard */}
         {activeTab === 'analysis' && (
-          <AnalysisDashboard />
+          <AnalysisDashboard apiBase={API_BASE} />
         )}
       </main>
     </div>

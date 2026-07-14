@@ -1,78 +1,153 @@
-import React, { useState } from 'react';
-import { Check, Info, TrendingUp, DollarSign, Wallet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, Info, TrendingUp, DollarSign, Wallet, Shield, Activity, RefreshCw } from 'lucide-react';
 
-const STRATEGIES_DATA = [
+const DEMO_STRATEGIES_DATA = [
   {
     id: 'bullish',
     name: 'Index Performer: Bullish',
     capital: 750000,
-    monthlyProfits: {
-      Mar: 22000,
-      Apr: 15000,
-      May: 12000,
-      Jun: 35000,
-      Jul: 18000,
-      Aug: 13000
-    }
+    tradesCount: 18,
+    winRate: '72%',
+    winners: 13,
+    losers: 5,
+    monthlyProfits: { Mar: 22000, Apr: 15000, May: 12000, Jun: 35000, Jul: 18000, Aug: 13000 }
   },
   {
     id: 'bearish',
     name: 'Index Performer: Bearish',
     capital: 750000,
-    monthlyProfits: {
-      Mar: 16100,
-      Apr: 11800,
-      May: 9200,
-      Jun: 20500,
-      Jul: 11600,
-      Aug: 8500
-    }
+    tradesCount: 14,
+    winRate: '64%',
+    winners: 9,
+    losers: 5,
+    monthlyProfits: { Mar: 16100, Apr: 11800, May: 9200, Jun: 20500, Jul: 11600, Aug: 8500 }
   },
   {
     id: 'risk_manager',
     name: 'BankNIFTY Risk Manager',
     capital: 500000,
-    monthlyProfits: {
-      Mar: 10000,
-      Apr: 8000,
-      May: 9000,
-      Jun: 15000,
-      Jul: 8000,
-      Aug: 7000
-    }
+    tradesCount: 12,
+    winRate: '75%',
+    winners: 9,
+    losers: 3,
+    monthlyProfits: { Mar: 10000, Apr: 8000, May: 9000, Jun: 15000, Jul: 8000, Aug: 7000 }
   }
 ];
 
 const MONTHS = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
 
-export default function AnalysisDashboard() {
-  const [selectedStrats, setSelectedStrats] = useState({
-    bullish: true,
-    bearish: true,
-    risk_manager: true
-  });
-
+export default function AnalysisDashboard({ apiBase }) {
+  const [loading, setLoading] = useState(true);
+  const [realTrades, setRealTrades] = useState([]);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [selectedStrats, setSelectedStrats] = useState({});
   const [hoveredBarIndex, setHoveredBarIndex] = useState(null);
   const [hoveredLineIndex, setHoveredLineIndex] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Fetch actual trades
+  useEffect(() => {
+    if (!apiBase) {
+      setLoading(false);
+      setIsDemoMode(true);
+      return;
+    }
+
+    setLoading(true);
+    fetch(`${apiBase}/trades?period=All Historical Trades`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setRealTrades(data);
+          setIsDemoMode(false);
+          
+          // Pre-select all parsed unique symbols
+          const uniqueSymbols = Array.from(new Set(data.map(t => t.symbol)));
+          const defaultSelected = {};
+          uniqueSymbols.forEach(sym => {
+            defaultSelected[sym] = true;
+          });
+          setSelectedStrats(defaultSelected);
+        } else {
+          // Fall back to demo mode if empty
+          setIsDemoMode(true);
+          const defaultSelected = { bullish: true, bearish: true, risk_manager: true };
+          setSelectedStrats(defaultSelected);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch historical trades for analysis:", err);
+        setIsDemoMode(true);
+        const defaultSelected = { bullish: true, bearish: true, risk_manager: true };
+        setSelectedStrats(defaultSelected);
+        setLoading(false);
+      });
+  }, [apiBase, refreshTrigger]);
+
+  // Compute processed symbols from real trades
+  const getProcessedRealData = () => {
+    const uniqueSymbols = Array.from(new Set(realTrades.map(t => t.symbol)));
+    return uniqueSymbols.map(sym => {
+      const symTrades = realTrades.filter(t => t.symbol === sym);
+      
+      // Calculate capital exposure as max single trade value
+      const maxExposure = Math.max(...symTrades.map(t => t.qty * t.entry_price), 100000);
+      
+      // Calculate win-rate metrics
+      const winners = symTrades.filter(t => t.pnl > 0).length;
+      const losers = symTrades.filter(t => t.pnl < 0).length;
+      const winRate = symTrades.length > 0 ? ((winners / symTrades.length) * 100).toFixed(0) + '%' : '0%';
+
+      // Initialize monthly profits
+      const monthlyProfits = { Mar: 0, Apr: 0, May: 0, Jun: 0, Jul: 0, Aug: 0 };
+      
+      symTrades.forEach(t => {
+        if (!t.timestamp) return;
+        // Parse date string e.g. "2026-07-13 15:15:10"
+        const parts = t.timestamp.split(' ')[0].split('-');
+        if (parts.length === 3) {
+          const monthNum = parseInt(parts[1], 10);
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[monthNum - 1];
+          if (monthName in monthlyProfits) {
+            monthlyProfits[monthName] += t.pnl;
+          }
+        }
+      });
+
+      return {
+        id: sym,
+        name: sym,
+        capital: maxExposure,
+        tradesCount: symTrades.length,
+        winRate,
+        winners,
+        losers,
+        monthlyProfits
+      };
+    });
+  };
+
+  const activeStrategies = isDemoMode ? DEMO_STRATEGIES_DATA : getProcessedRealData();
 
   const toggleStrategy = (id) => {
     setSelectedStrats(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      // Keep at least one strategy selected to avoid division by zero or blank screens
       const selectedCount = Object.values(next).filter(Boolean).length;
       return selectedCount > 0 ? next : prev;
     });
   };
 
   // 1. Calculate Capitals
-  const totalCapital = STRATEGIES_DATA.reduce((sum, s) => sum + s.capital, 0);
-  const selectedCapital = STRATEGIES_DATA.reduce((sum, s) => {
+  const totalCapital = activeStrategies.reduce((sum, s) => sum + s.capital, 0);
+  const selectedCapital = activeStrategies.reduce((sum, s) => {
     return sum + (selectedStrats[s.id] ? s.capital : 0);
   }, 0);
 
   // 2. Calculate Monthly Profits based on selection
   const monthlyTotals = MONTHS.map(month => {
-    const profit = STRATEGIES_DATA.reduce((sum, s) => {
+    const profit = activeStrategies.reduce((sum, s) => {
       return sum + (selectedStrats[s.id] ? s.monthlyProfits[month] : 0);
     }, 0);
     return { month, profit };
@@ -87,7 +162,7 @@ export default function AnalysisDashboard() {
 
   const totalCumulativeProfit = runningSum;
 
-  // Format currency in Indian Style (Lakhs / Crores)
+  // Format currency
   const formatINR = (val) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -98,17 +173,23 @@ export default function AnalysisDashboard() {
 
   // Format labels like 48K, 1.1L
   const formatLabel = (val) => {
-    if (val === 0) return '0';
-    if (val >= 100000) {
-      return (val / 100000).toFixed(1) + 'L';
+    const isNegative = val < 0;
+    const absVal = Math.abs(val);
+    let formatted = '';
+    
+    if (absVal === 0) return '0';
+    if (absVal >= 100000) {
+      formatted = (absVal / 100000).toFixed(1) + 'L';
+    } else if (absVal >= 1000) {
+      formatted = Math.round(absVal / 1000) + 'K';
+    } else {
+      formatted = absVal.toFixed(0);
     }
-    if (val >= 1000) {
-      return Math.round(val / 1000) + 'K';
-    }
-    return val.toString();
+    
+    return isNegative ? `-${formatted}` : formatted;
   };
 
-  // SVG dimensions & grid setup
+  // SVG dimensions
   const width = 500;
   const height = 300;
   const paddingLeft = 55;
@@ -118,26 +199,52 @@ export default function AnalysisDashboard() {
   const plotWidth = width - paddingLeft - paddingRight;
   const plotHeight = height - paddingTop - paddingBottom;
 
-  // ── BAR CHART CALCULATIONS ──────────────────────────────────────────────────
-  const barYMax = 80000;
-  const barYGridTicks = [0, 10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000];
+  // ── DYNAMIC BAR CHART CALCULATIONS (Supports negative and positive values) ──
+  const maxAbsMonthly = Math.max(...monthlyTotals.map(d => Math.abs(d.profit)), 1000);
+  const barYLimit = Math.ceil(maxAbsMonthly / 1000) * 1000;
+  const barYGridTicks = [
+    -barYLimit,
+    -barYLimit / 2,
+    0,
+    barYLimit / 2,
+    barYLimit
+  ];
   
+  const yZero = paddingTop + plotHeight / 2; // Baseline in the exact middle
+
   const getBarCoords = (index, val) => {
     const colWidth = plotWidth / MONTHS.length;
     const x = paddingLeft + colWidth * index + colWidth / 2;
-    const barH = (val / barYMax) * plotHeight;
-    const y = paddingTop + plotHeight - barH;
-    return { x, y, h: barH };
+    const yVal = yZero - (val / barYLimit) * (plotHeight / 2);
+    
+    let y = yVal;
+    let h = yZero - yVal;
+    if (val < 0) {
+      y = yZero;
+      h = yVal - yZero;
+    }
+    return { x, y, h: Math.abs(h), yVal };
   };
 
-  // ── LINE CHART CALCULATIONS ─────────────────────────────────────────────────
-  const lineYMax = 250000;
-  const lineYGridTicks = [0, 50000, 100000, 150000, 200000, 250000];
+  // ── DYNAMIC LINE CHART CALCULATIONS (Supports negative bounds) ─────────────
+  const maxCumulative = Math.max(...cumulativeTotals.map(d => d.cumulative), 1000);
+  const minCumulative = Math.min(...cumulativeTotals.map(d => d.cumulative), 0);
+  const lineLimitMax = Math.ceil((maxCumulative * 1.1) / 1000) * 1000;
+  const lineLimitMin = Math.floor((minCumulative * 1.1) / 1000) * 1000;
+  
+  const lineRange = lineLimitMax - lineLimitMin || 1000;
+  const lineYGridTicks = [
+    lineLimitMin,
+    lineLimitMin + lineRange * 0.25,
+    lineLimitMin + lineRange * 0.5,
+    lineLimitMin + lineRange * 0.75,
+    lineLimitMax
+  ];
 
   const getLineCoords = (index, val) => {
     const colWidth = plotWidth / MONTHS.length;
     const x = paddingLeft + colWidth * index + colWidth / 2;
-    const y = paddingTop + plotHeight - (val / lineYMax) * plotHeight;
+    const y = paddingTop + plotHeight - ((val - lineLimitMin) / lineRange) * plotHeight;
     return { x, y };
   };
 
@@ -145,6 +252,16 @@ export default function AnalysisDashboard() {
   const linePathD = linePoints.reduce((path, pt, idx) => {
     return idx === 0 ? `M ${pt.x} ${pt.y}` : `${path} L ${pt.x} ${pt.y}`;
   }, '');
+
+  if (loading) {
+    return (
+      <div className="analysis-loading" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 120px)', gap: '16px' }}>
+        <RefreshCw className="spinner" size={32} style={{ color: '#00d2ff', animation: 'spin 1s linear infinite' }} />
+        <span style={{ color: '#8f8c96', fontSize: '14px', fontWeight: 500 }}>Loading actual trade logs...</span>
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="analysis-container">
@@ -156,6 +273,14 @@ export default function AnalysisDashboard() {
           gap: 28px;
           overflow-y: auto;
           height: calc(100vh - 60px);
+        }
+
+        .header-panel {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
         }
 
         .header-title {
@@ -188,7 +313,7 @@ export default function AnalysisDashboard() {
           border: 1px solid rgba(255, 255, 255, 0.04);
           cursor: pointer;
           transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          min-width: 250px;
+          min-width: 260px;
           flex: 1;
         }
 
@@ -236,7 +361,7 @@ export default function AnalysisDashboard() {
         }
 
         .strat-cap {
-          font-size: 13px;
+          font-size: 12px;
           color: var(--text-secondary);
           margin-top: 3px;
         }
@@ -285,6 +410,12 @@ export default function AnalysisDashboard() {
           border-color: rgba(0, 210, 255, 0.1);
         }
 
+        .kpi-icon-box.red {
+          color: var(--color-red);
+          background: rgba(255, 23, 68, 0.05);
+          border-color: rgba(255, 23, 68, 0.1);
+        }
+
         .kpi-text {
           display: flex;
           flex-direction: column;
@@ -308,6 +439,11 @@ export default function AnalysisDashboard() {
         .kpi-val.green {
           color: var(--color-green);
           text-shadow: 0 0 10px rgba(0, 230, 118, 0.15);
+        }
+        
+        .kpi-val.red {
+          color: var(--color-red);
+          text-shadow: 0 0 10px rgba(255, 23, 68, 0.15);
         }
 
         /* Charts grid */
@@ -355,6 +491,11 @@ export default function AnalysisDashboard() {
         .grid-line {
           stroke: rgba(255, 255, 255, 0.035);
           stroke-width: 1;
+        }
+        
+        .baseline-zero {
+          stroke: rgba(255, 255, 255, 0.08);
+          stroke-width: 1.5;
         }
 
         .chart-axis-text {
@@ -445,15 +586,65 @@ export default function AnalysisDashboard() {
         }
       `}</style>
 
-      {/* Title */}
-      <div>
-        <h1 className="header-title">Compare Strategies</h1>
-        <div className="header-desc">Analyze and benchmark performance configurations across strategies</div>
+      {/* Header Panel */}
+      <div className="header-panel">
+        <div>
+          <h1 className="header-title">Compare {isDemoMode ? 'Strategies (Demo)' : 'Symbols (Live)'}</h1>
+          <div className="header-desc">
+            {isDemoMode 
+              ? 'Displaying demo strategy data. Run actual trades to view live statistics.'
+              : 'Displaying real trade analysis parsed directly from local trade history logs.'}
+          </div>
+        </div>
+
+        {/* Toggle & Refresh Actions */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          {!isDemoMode && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setRefreshTrigger(prev => prev + 1)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          )}
+          <button 
+            className="btn btn-primary" 
+            onClick={() => {
+              if (isDemoMode) {
+                // If switching to Real, verify if we have data
+                if (realTrades.length > 0) {
+                  setIsDemoMode(false);
+                  const uniqueSymbols = Array.from(new Set(realTrades.map(t => t.symbol)));
+                  const defaultSelected = {};
+                  uniqueSymbols.forEach(sym => { defaultSelected[sym] = true; });
+                  setSelectedStrats(defaultSelected);
+                } else {
+                  alert("No real trade logs available in trade_history.csv yet. Execute some paper or live trades first.");
+                }
+              } else {
+                setIsDemoMode(true);
+                setSelectedStrats({ bullish: true, bearish: true, risk_manager: true });
+              }
+            }}
+          >
+            {isDemoMode ? 'Show Real Trades' : 'Show Demo Data'}
+          </button>
+        </div>
       </div>
 
-      {/* Strategies Checkboxes Selector */}
+      {/* Warning banner if real trades are empty and we default to demo */}
+      {realTrades.length === 0 && !isDemoMode && (
+        <div style={{ background: 'rgba(255, 145, 0, 0.1)', border: '1px solid rgba(255, 145, 0, 0.25)', borderRadius: '12px', padding: '12px 18px', color: '#ff9100', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Info size={16} />
+          <span>No historical trades found in <code>logs/trade_history.csv</code>. Displaying demo strategy metrics.</span>
+        </div>
+      )}
+
+      {/* Strategies / Symbols Checkboxes Selector */}
       <div className="strategies-selector">
-        {STRATEGIES_DATA.map(strat => {
+        {activeStrategies.map(strat => {
           const isActive = selectedStrats[strat.id];
           return (
             <div 
@@ -466,7 +657,12 @@ export default function AnalysisDashboard() {
               </div>
               <div className="strat-details">
                 <span className="strat-name">{strat.name}</span>
-                <span className="strat-cap">{formatINR(strat.capital)}</span>
+                <span className="strat-cap">
+                  {isDemoMode ? 'Capital: ' : 'Exposure: '}{formatINR(strat.capital)}
+                </span>
+                <span className="strat-cap" style={{ fontSize: '11px', marginTop: '1px' }}>
+                  Win Rate: {strat.winRate} ({strat.tradesCount} Trades)
+                </span>
               </div>
             </div>
           );
@@ -480,7 +676,7 @@ export default function AnalysisDashboard() {
             <Wallet size={20} />
           </div>
           <div className="kpi-text">
-            <span className="kpi-label">Total Capital</span>
+            <span className="kpi-label">{isDemoMode ? 'Total Capital' : 'Total Traded Exposure'}</span>
             <span className="kpi-val">{formatINR(totalCapital)}</span>
           </div>
         </div>
@@ -490,18 +686,20 @@ export default function AnalysisDashboard() {
             <DollarSign size={20} />
           </div>
           <div className="kpi-text">
-            <span className="kpi-label">Selected Capital</span>
+            <span className="kpi-label">Selected Exposure</span>
             <span className="kpi-val">{formatINR(selectedCapital)}</span>
           </div>
         </div>
 
         <div className="kpi-card">
-          <div className="kpi-icon-box green">
+          <div className={`kpi-icon-box ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
             <TrendingUp size={20} />
           </div>
           <div className="kpi-text">
-            <span className="kpi-label">Cumulative Profit</span>
-            <span className="kpi-val green">{formatINR(totalCumulativeProfit)}</span>
+            <span className="kpi-label">Cumulative Profit / Loss</span>
+            <span className={`kpi-val ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
+              {totalCumulativeProfit >= 0 ? '+' : ''}{formatINR(totalCumulativeProfit)}
+            </span>
           </div>
         </div>
       </div>
@@ -518,11 +716,16 @@ export default function AnalysisDashboard() {
                   <stop offset="0%" stopColor="#00d2ff" />
                   <stop offset="100%" stopColor="rgba(0, 210, 255, 0.25)" />
                 </linearGradient>
+                <linearGradient id="bar-grad-loss" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ff1744" />
+                  <stop offset="100%" stopColor="rgba(255, 23, 68, 0.25)" />
+                </linearGradient>
               </defs>
 
               {/* Grid Lines */}
               {barYGridTicks.map((tick, i) => {
-                const y = paddingTop + plotHeight - (tick / barYMax) * plotHeight;
+                const y = yZero - (tick / barYLimit) * (plotHeight / 2);
+                const isZero = tick === 0;
                 return (
                   <g key={i}>
                     <line 
@@ -530,7 +733,7 @@ export default function AnalysisDashboard() {
                       y1={y} 
                       x2={width - paddingRight} 
                       y2={y} 
-                      className="grid-line" 
+                      className={isZero ? "baseline-zero" : "grid-line"} 
                     />
                     <text 
                       x={paddingLeft - 8} 
@@ -546,9 +749,10 @@ export default function AnalysisDashboard() {
 
               {/* Bar Elements */}
               {monthlyTotals.map((item, idx) => {
-                const { x, y, h } = getBarCoords(idx, item.profit);
+                const { x, y, h, yVal } = getBarCoords(idx, item.profit);
                 const barWidth = 36;
                 const isHovered = hoveredBarIndex === idx;
+                const hasValue = item.profit !== 0;
 
                 return (
                   <g 
@@ -567,26 +771,26 @@ export default function AnalysisDashboard() {
                     />
 
                     {/* Actual Bar */}
-                    {item.profit > 0 && (
+                    {hasValue && (
                       <rect
                         x={x - barWidth / 2}
                         y={y}
                         width={barWidth}
                         height={Math.max(2, h)}
-                        fill="url(#bar-grad)"
+                        fill={item.profit >= 0 ? "url(#bar-grad)" : "url(#bar-grad-loss)"}
                         className="bar-rect"
                         rx={4}
                       />
                     )}
 
                     {/* Value Label */}
-                    {item.profit > 0 && (
+                    {hasValue && (
                       <text
                         x={x}
-                        y={y - 8}
+                        y={item.profit >= 0 ? y - 8 : y + h + 14}
                         className="chart-label-text"
                       >
-                        {item.profit}
+                        {formatLabel(item.profit)}
                       </text>
                     )}
                   </g>
@@ -610,16 +814,6 @@ export default function AnalysisDashboard() {
                   </text>
                 );
               })}
-              
-              {/* Bottom border line */}
-              <line 
-                x1={paddingLeft} 
-                y1={paddingTop + plotHeight} 
-                x2={width - paddingRight} 
-                y2={paddingTop + plotHeight} 
-                stroke="rgba(255,255,255,0.06)" 
-                strokeWidth={1} 
-              />
             </svg>
             
             {/* HTML Tooltip on hover */}
@@ -628,10 +822,10 @@ export default function AnalysisDashboard() {
                 className="chart-tooltip visible"
                 style={{
                   left: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).x) / width) * 100}%`,
-                  top: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).y) / height) * 100}%`
+                  top: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).yVal) / height) * 100}%`
                 }}
               >
-                <strong>{MONTHS[hoveredBarIndex]} Profit:</strong> {formatINR(monthlyTotals[hoveredBarIndex].profit)}
+                <strong>{MONTHS[hoveredBarIndex]} Profit/Loss:</strong> {formatINR(monthlyTotals[hoveredBarIndex].profit)}
               </div>
             )}
           </div>
@@ -644,7 +838,8 @@ export default function AnalysisDashboard() {
             <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
               {/* Grid Lines */}
               {lineYGridTicks.map((tick, i) => {
-                const y = paddingTop + plotHeight - (tick / lineYMax) * plotHeight;
+                const y = paddingTop + plotHeight - ((tick - lineLimitMin) / lineRange) * plotHeight;
+                const isZero = Math.abs(tick) < 0.01;
                 return (
                   <g key={i}>
                     <line 
@@ -652,7 +847,7 @@ export default function AnalysisDashboard() {
                       y1={y} 
                       x2={width - paddingRight} 
                       y2={y} 
-                      className="grid-line" 
+                      className={isZero ? "baseline-zero" : "grid-line"} 
                     />
                     <text 
                       x={paddingLeft - 8} 
@@ -660,7 +855,7 @@ export default function AnalysisDashboard() {
                       textAnchor="end" 
                       className="chart-axis-text"
                     >
-                      {tick === 0 ? '0' : formatLabel(tick)}
+                      {formatLabel(tick)}
                     </text>
                   </g>
                 );
@@ -678,7 +873,7 @@ export default function AnalysisDashboard() {
               )}
 
               {/* Line Path */}
-              {totalCumulativeProfit > 0 && (
+              {linePoints.length > 0 && (
                 <path
                   d={linePathD}
                   fill="none"
@@ -737,16 +932,6 @@ export default function AnalysisDashboard() {
                   </text>
                 );
               })}
-
-              {/* Bottom border line */}
-              <line 
-                x1={paddingLeft} 
-                y1={paddingTop + plotHeight} 
-                x2={width - paddingRight} 
-                y2={paddingTop + plotHeight} 
-                stroke="rgba(255,255,255,0.06)" 
-                strokeWidth={1} 
-              />
             </svg>
 
             {/* HTML Tooltip on hover */}
@@ -758,7 +943,7 @@ export default function AnalysisDashboard() {
                   top: `${(linePoints[hoveredLineIndex].y / height) * 100}%`
                 }}
               >
-                <strong>Cumulative:</strong> {formatINR(cumulativeTotals[hoveredLineIndex].cumulative)}
+                <strong>Cumulative P&L:</strong> {formatINR(cumulativeTotals[hoveredLineIndex].cumulative)}
               </div>
             )}
           </div>
