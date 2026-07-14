@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Play, Square, RefreshCw, BarChart2, Shield, Settings, Key, 
   ArrowUpRight, ArrowDownRight, Activity, TrendingUp, 
-  CheckCircle, Clock, Save, FileText, Globe
+  CheckCircle, Clock, Save, FileText, Globe, PieChart, Wallet
 } from 'lucide-react';
 import FibonacciChart from './components/FibonacciChart';
+import AnalysisDashboard from './components/AnalysisDashboard';
 import './App.css';
 
 const API_BASE = 'http://127.0.0.1:8000/api';
@@ -482,6 +483,14 @@ export default function App() {
           </button>
           
           <button 
+            className={`nav-item ${activeTab === 'analysis' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analysis')}
+          >
+            <PieChart size={18} />
+            Data Analysis
+          </button>
+          
+          <button 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
           >
@@ -516,13 +525,13 @@ export default function App() {
             }}
             title="Click to toggle trading mode"
           >
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: status.trading_mode === 'paper' ? '#6444e3' : '#8f8c96', transition: 'color 0.2s' }}>Paper</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: status.trading_mode === 'paper' ? '#00d2ff' : '#8f8c96', transition: 'color 0.2s' }}>Paper</span>
             
             <div style={{ 
               width: '36px', 
               height: '18px', 
-              background: status.trading_mode === 'live' ? 'rgba(255, 23, 68, 0.15)' : 'rgba(100, 68, 227, 0.15)', 
-              border: status.trading_mode === 'live' ? '1px solid #ff1744' : '1px solid #6444e3',
+              background: status.trading_mode === 'live' ? 'rgba(255, 23, 68, 0.15)' : 'rgba(0, 210, 255, 0.15)', 
+              border: status.trading_mode === 'live' ? '1px solid #ff1744' : '1px solid #00d2ff',
               borderRadius: '9px', 
               position: 'relative', 
               transition: 'all 0.2s ease',
@@ -531,13 +540,13 @@ export default function App() {
               <div style={{ 
                 width: '12px', 
                 height: '12px', 
-                background: status.trading_mode === 'live' ? '#ff1744' : '#6444e3', 
+                background: status.trading_mode === 'live' ? '#ff1744' : '#00d2ff', 
                 borderRadius: '50%', 
                 position: 'absolute', 
                 top: '2px', 
                 left: status.trading_mode === 'live' ? '20px' : '2px', 
                 transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                boxShadow: status.trading_mode === 'live' ? '0 0 8px #ff1744' : '0 0 8px #6444e3'
+                boxShadow: status.trading_mode === 'live' ? '0 0 8px #ff1744' : '0 0 8px #00d2ff'
               }} />
             </div>
             
@@ -607,7 +616,7 @@ export default function App() {
           
           <div className="control-actions" style={{ display: 'flex', gap: '10px' }}>
             <button 
-              className={`btn ${status.scanning_active ? 'btn-danger' : 'btn-success'}`}
+              className="btn btn-primary"
               onClick={toggleScanner}
             >
               {status.scanning_active ? <Square size={16} /> : <Play size={16} />}
@@ -623,49 +632,73 @@ export default function App() {
           <>
             {/* KPI Cards Row */}
             <div className="metrics-grid">
-              <div className="metric-card">
-                <div className="metric-title">Total Equity</div>
-                <div className="metric-value">{metrics.formatted_equity}</div>
-                <div className="metric-delta neutral">Net Asset Value (NAV)</div>
-              </div>
-
-              <div className="metric-card">
-                <div className="metric-title">Free Margin</div>
-                <div className="metric-value">{metrics.formatted_available}</div>
-                <div className="metric-delta neutral">
-                  Utilized: {metrics.margin_utilization_pct}% ({metrics.formatted_used})
+              {/* Card 1: Total Equity */}
+              <div className="live-metric-card">
+                <div className="live-icon-box cyan">
+                  <Wallet size={20} />
                 </div>
-              </div>
-              
-              <div className="metric-card">
-                <div className="metric-title">Realized Daily P&L</div>
-                <div className="metric-value" style={{ color: metrics.realized_pnl >= 0 ? '#00e676' : '#ff1744' }}>
-                  {metrics.formatted_realized}
-                </div>
-                <div className={`metric-delta ${metrics.realized_pnl >= 0 ? 'green' : 'red'}`}>
-                  Locked-in daily P&L
+                <div className="live-metric-text">
+                  <span className="live-metric-label">Total Equity</span>
+                  <span className="live-metric-val">{metrics.formatted_equity}</span>
+                  <span className="live-metric-subtext">Capital: {metrics.formatted_capital}</span>
                 </div>
               </div>
 
-              <div className="metric-card">
-                <div className="metric-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  Unrealized P&L
-                  {metrics.unrealized_pnl !== 0 && (
-                    <span className="live-pulse-dot" style={{
-                      width: '6px',
-                      height: '6px',
-                      background: metrics.unrealized_pnl >= 0 ? '#00e676' : '#ff1744',
-                      borderRadius: '50%',
-                      display: 'inline-block',
-                      boxShadow: `0 0 8px ${metrics.unrealized_pnl >= 0 ? '#00e676' : '#ff1744'}`
-                    }} />
-                  )}
+              {/* Card 2: Free Margin */}
+              <div className="live-metric-card">
+                <div className="live-icon-box cyan">
+                  <Shield size={20} />
                 </div>
-                <div className="metric-value" style={{ color: metrics.unrealized_pnl >= 0 ? '#00e676' : '#ff1744' }}>
-                  {metrics.formatted_unrealized}
+                <div className="live-metric-text">
+                  <span className="live-metric-label">Free Margin</span>
+                  <span className="live-metric-val">{metrics.formatted_available}</span>
+                  <span className="live-metric-subtext">
+                    Utilized: {metrics.margin_utilization_pct}% ({metrics.formatted_used})
+                  </span>
                 </div>
-                <div className={`metric-delta ${metrics.unrealized_pnl >= 0 ? 'green' : 'red'}`}>
-                  Floating open positions
+              </div>
+
+              {/* Card 3: Live Daily P&L */}
+              <div className="live-metric-card">
+                <div className={`live-icon-box ${metrics.total_pnl > 0 ? 'green' : metrics.total_pnl < 0 ? 'red' : ''}`}>
+                  <TrendingUp size={20} />
+                </div>
+                <div className="live-metric-text">
+                  <span className="live-metric-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    Live Daily P&L
+                    {metrics.unrealized_pnl !== 0 && (
+                      <span className="live-pulse-dot" style={{
+                        width: '6px',
+                        height: '6px',
+                        background: metrics.unrealized_pnl >= 0 ? '#00e676' : '#ff1744',
+                        borderRadius: '50%',
+                        display: 'inline-block',
+                        boxShadow: `0 0 8px ${metrics.unrealized_pnl >= 0 ? '#00e676' : '#ff1744'}`
+                      }} />
+                    )}
+                  </span>
+                  <span className="live-metric-val" style={{ color: metrics.total_pnl > 0 ? '#00e676' : metrics.total_pnl < 0 ? '#ff1744' : '#ffffff' }}>
+                    {metrics.formatted_pnl}
+                  </span>
+                  <span className="live-metric-subtext">
+                    Realized: {metrics.formatted_realized} | Unrealized: {metrics.formatted_unrealized}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: Trade Limits */}
+              <div className="live-metric-card">
+                <div className="live-icon-box amber">
+                  <Activity size={20} />
+                </div>
+                <div className="live-metric-text">
+                  <span className="live-metric-label">Trade Limits</span>
+                  <span className="live-metric-val">
+                    {metrics.trades_count} / {metrics.trades_limit} Trades
+                  </span>
+                  <span className="live-metric-subtext">
+                    Win Rate: {metrics.formatted_win_rate} ({metrics.winners}W - {metrics.losers}L)
+                  </span>
                 </div>
               </div>
             </div>
@@ -1768,6 +1801,11 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB 5: Data Analysis Dashboard */}
+        {activeTab === 'analysis' && (
+          <AnalysisDashboard />
         )}
       </main>
     </div>
