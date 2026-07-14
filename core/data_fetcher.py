@@ -54,7 +54,7 @@ def _generate_mock_ohlcv(
 MOCK_BASE_PRICES = {
     "RELIANCE": 2800.0, "TCS": 3900.0, "INFY": 1500.0, "HDFCBANK": 1600.0,
     "ICICIBANK": 950.0, "SBIN": 650.0, "BAJFINANCE": 6800.0, "WIPRO": 450.0,
-    "AXISBANK": 1100.0, "MARUTI": 10500.0,
+    "AXISBANK": 1100.0, "MARUTI": 10500.0, "NIFTY": 24300.0, "NIFTY 50": 24300.0,
 }
 
 
@@ -89,7 +89,11 @@ class KiteDataFetcher:
                 base_price=MOCK_BASE_PRICES.get(symbol.upper(), 1000.0),
             )
 
-        return optimized_client.get_historical(symbol, interval, days)
+        df = optimized_client.get_historical(symbol, interval, days)
+        if df.empty and symbol.upper() in ("NIFTY", "NIFTY 50", "NIFTY_50", "BANKNIFTY", "BANK NIFTY"):
+            logger.warning(f"[Data Fetcher] NIFTY historical data from Angel One is empty/failed. Falling back to Yahoo Finance.")
+            df = self.get_historical_data_yfinance(symbol, interval, days)
+        return df
 
     def get_ltp(self, symbol: str) -> float:
         """Last traded price from OptimizedAngelClient."""
@@ -129,3 +133,93 @@ class KiteDataFetcher:
             return {"available": 100_000.0, "used": 0.0, "total": 100_000.0}
             
         return optimized_client.get_margins()
+
+    def get_historical_data_yfinance(
+        self,
+        symbol: str,
+        interval: str = "15minute",
+        days: int = 30,
+    ) -> pd.DataFrame:
+        """Download historical candles from Yahoo Finance directly, cleaning columns and timezone."""
+        import yfinance as yf
+        
+        # 1. Resolve Yahoo Finance symbol
+        sym = symbol.strip().upper()
+        if sym in ("NIFTY", "NIFTY 50", "NIFTY_50"):
+            yf_symbol = "^NSEI"
+        elif sym in ("BANKNIFTY", "BANK NIFTY"):
+            yf_symbol = "^NSEBANK"
+        elif not sym.endswith(".NS") and "^" not in sym:
+            yf_symbol = f"{sym}.NS"
+        else:
+            yf_symbol = sym
+
+        # 2. Map timeframe/interval
+        tf_map = {
+            "minute": "1m",
+            "1minute": "1m",
+            "3minute": "2m",      # Fallback 3m to 2m
+            "5minute": "5m",
+            "10minute": "5m",     # Fallback 10m to 5m
+            "15minute": "15m",
+            "30minute": "30m",
+            "60minute": "1h",
+            "day": "1d",
+            "1day": "1d"
+        }
+        yf_interval = tf_map.get(interval, "15m")
+
+        # 3. Calculate period based on requested days
+        if days <= 1:
+            period = "1d"
+        elif days <= 5:
+            period = "5d"
+        elif days <= 30:
+            period = "1mo"
+        elif days <= 90:
+            period = "3mo"
+        elif days <= 180:
+            period = "6mo"
+        elif days <= 365:
+            period = "1y"
+        else:
+            period = "max"
+
+        logger.info(f"[yFinance Fetcher] Downloading {yf_symbol} (Interval: {yf_interval}, Period: {period})")
+
+        try:
+            df = yf.download(tickers=yf_symbol, period=period, interval=yf_interval, progress=False)
+            if df.empty:
+                logger.warning(f"[yFinance Fetcher] Download returned empty DataFrame for {yf_symbol}")
+                return pd.DataFrame()
+
+            # Clean MultiIndex columns
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.droplevel(1)
+
+            # Lowercase columns
+            df = df.rename(columns={
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume"
+            })
+
+            # Keep only required columns
+            df = df[["open", "high", "low", "close", "volume"]]
+
+            # Localize timezone to IST (Asia/Kolkata)
+            if df.index.tz is None:
+                df.index = df.index.tz_localize("UTC").tz_convert("Asia/Kolkata")
+            else:
+                df.index = df.index.tz_convert("Asia/Kolkata")
+
+            # Filter data to cutoff
+            cutoff = now_ist() - pd.Timedelta(days=days)
+            df = df[df.index >= cutoff]
+
+            return df.astype(float)
+        except Exception as e:
+            logger.error(f"[yFinance Fetcher] Failed to download {yf_symbol}: {e}")
+            return pd.DataFrame()

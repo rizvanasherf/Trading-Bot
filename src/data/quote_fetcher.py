@@ -44,66 +44,69 @@ class BatchQuoteFetcher:
             return results
 
         # 2. Make the batch API call for missing symbols
-        if connector.smart is not None and tokens_to_fetch:
-            self.limiter.acquire("Batch Quote API Call")
-            self.total_api_calls += 1
-            
-            # Naive approach would make len(missing_symbols) calls
-            saved = len(missing_symbols) - 1
-            self.total_saved_calls += saved
-            logger.info(f"[Quote Fetcher] Batch fetching {len(missing_symbols)} quotes. Saved {saved} calls vs naive approach.")
+        if connector.smart is not None and missing_symbols:
+            exchange_tokens = {}
+            for sym in missing_symbols:
+                token, _ = connector.get_token_info(sym)
+                if token:
+                    exch = connector.get_exchange(sym)
+                    if exch not in exchange_tokens:
+                        exchange_tokens[exch] = []
+                    exchange_tokens[exch].append(token)
 
-            try:
-                # Mode FULL retrieves LTP and OHLC
-                params = {
-                    "mode": "FULL",
-                    "exchangeTokens": {
-                        "NSE": tokens_to_fetch
-                    }
-                }
-                res = connector.smart.getMarketData(params["mode"], params["exchangeTokens"])
+            if exchange_tokens:
+                self.limiter.acquire("Batch Quote API Call")
+                self.total_api_calls += 1
                 
-                if res.get("status") is True and res.get("data") and "fetched" in res["data"]:
-                    fetched_list = res["data"]["fetched"]
-                    
-                    # Create lookup mappings
-                    token_to_symbol = {}
-                    for sym in missing_symbols:
-                        tok, _ = connector.get_token_info(sym)
-                        if tok:
-                            token_to_symbol[tok] = sym
+                # Naive approach would make len(missing_symbols) calls
+                saved = len(missing_symbols) - 1
+                self.total_saved_calls += saved
+                logger.info(f"[Quote Fetcher] Batch fetching {len(missing_symbols)} quotes across {list(exchange_tokens.keys())}. Saved {saved} calls vs naive approach.")
 
-                    for item in fetched_list:
-                        token = item.get("symbolToken")
-                        symbol_name = token_to_symbol.get(token)
-                        if not symbol_name:
-                            continue
-
-                        # Map Angel response to expected format
-                        ltp = float(item.get("ltp", 0.0))
-                        quote_data = {
-                            "last_price": ltp,
-                            "ohlc": {
-                                "open": float(item.get("open", ltp)),
-                                "high": float(item.get("high", ltp)),
-                                "low": float(item.get("low", ltp)),
-                                "close": float(item.get("close", ltp))
-                            },
-                            "volume": int(item.get("volume", 0)),
-                            "average_price": float(item.get("avgPrice", ltp))
-                        }
+                try:
+                    res = connector.smart.getMarketData("FULL", exchange_tokens)
+                
+                    if res.get("status") is True and res.get("data") and "fetched" in res["data"]:
+                        fetched_list = res["data"]["fetched"]
                         
-                        # Cache the result (5s TTL)
-                        cache_key = f"quote_{symbol_name.upper()}"
-                        self.cache.set(cache_key, quote_data, MarketDataCache.TTL_QUOTE)
-                        results[symbol_name] = quote_data
+                        # Create lookup mappings
+                        token_to_symbol = {}
+                        for sym in missing_symbols:
+                            tok, _ = connector.get_token_info(sym)
+                            if tok:
+                                token_to_symbol[tok] = sym
 
-                else:
-                    logger.warning(f"[Quote Fetcher] Batch API call failed: {res.get('message')}. Falling back to individual calls.")
+                        for item in fetched_list:
+                            token = item.get("symbolToken")
+                            symbol_name = token_to_symbol.get(token)
+                            if not symbol_name:
+                                continue
+
+                            # Map Angel response to expected format
+                            ltp = float(item.get("ltp", 0.0))
+                            quote_data = {
+                                "last_price": ltp,
+                                "ohlc": {
+                                    "open": float(item.get("open", ltp)),
+                                    "high": float(item.get("high", ltp)),
+                                    "low": float(item.get("low", ltp)),
+                                    "close": float(item.get("close", ltp))
+                                },
+                                "volume": int(item.get("volume", 0)),
+                                "average_price": float(item.get("avgPrice", ltp))
+                            }
+                            
+                            # Cache the result (5s TTL)
+                            cache_key = f"quote_{symbol_name.upper()}"
+                            self.cache.set(cache_key, quote_data, MarketDataCache.TTL_QUOTE)
+                            results[symbol_name] = quote_data
+
+                    else:
+                        logger.warning(f"[Quote Fetcher] Batch API call failed: {res.get('message')}. Falling back to individual calls.")
+                        self._fallback_individual(missing_symbols, results)
+                except Exception as e:
+                    logger.error(f"[Quote Fetcher] Exception during batch quote fetch: {e}. Falling back to individual calls.")
                     self._fallback_individual(missing_symbols, results)
-            except Exception as e:
-                logger.error(f"[Quote Fetcher] Exception during batch quote fetch: {e}. Falling back to individual calls.")
-                self._fallback_individual(missing_symbols, results)
         else:
             # Fallback to mock mode/individual if connector is offline
             self._fallback_individual(missing_symbols, results)

@@ -211,7 +211,11 @@ export default function App() {
       const res = await fetch(`${API_BASE}/config`);
       const data = await res.json();
       setConfig(data);
-      if (data.strategy?.symbols?.length > 0 && !chartSymbol) {
+      if (data.strategy?.strategy_type === 'cpr_intraday') {
+        if (chartSymbol !== 'NIFTY') {
+          setChartSymbol('NIFTY');
+        }
+      } else if (data.strategy?.symbols?.length > 0 && !chartSymbol) {
         setChartSymbol(data.strategy.symbols[0]);
       }
     } catch (e) {
@@ -703,6 +707,89 @@ export default function App() {
               </div>
             </div>
 
+            {/* CPR Options Status Panel */}
+            {config.strategy?.strategy_type === 'cpr_intraday' && status.cpr_data && (
+              <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(0, 210, 255, 0.15)' }}>
+                <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
+                  <h3 className="panel-title" style={{ color: '#00d2ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Activity size={18} />
+                    CPR Intraday Strategy: NIFTY 50 Options Monitor
+                  </h3>
+                  <div style={{ fontSize: '12px', color: '#8a90a6' }}>
+                    NIFTY Spot Index: <strong style={{ color: '#ffffff', fontSize: '14px' }}>₹{status.cpr_data.spot_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                  {/* CPR Range */}
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                    <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600 }}>CPR Pivot Levels</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#8a90a6' }}>TC:</span>
+                        <span style={{ fontWeight: 600 }}>₹{status.cpr_data.tc.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255, 255, 255, 0.03)', paddingTop: '4px' }}>
+                        <span style={{ color: '#8a90a6' }}>Pivot (P):</span>
+                        <span style={{ color: '#00d2ff', fontWeight: 700 }}>₹{status.cpr_data.pivot.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255, 255, 255, 0.03)', paddingTop: '4px' }}>
+                        <span style={{ color: '#8a90a6' }}>BC:</span>
+                        <span style={{ fontWeight: 600 }}>₹{status.cpr_data.bc.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Technicals */}
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                    <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600 }}>Intraday Technicals</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#8a90a6' }}>VWAP:</span>
+                        <span style={{ fontWeight: 600, color: status.cpr_data.spot_price >= status.cpr_data.vwap ? '#00e676' : '#ff1744' }}>
+                          ₹{status.cpr_data.vwap.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255, 255, 255, 0.03)', paddingTop: '6px' }}>
+                        <span style={{ color: '#8a90a6' }}>EMA 20:</span>
+                        <span style={{ fontWeight: 600 }}>₹{status.cpr_data.ema20.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ATM Strike */}
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600 }}>ATM Strikes</div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', marginTop: '6px' }}>
+                      {status.cpr_data.atm_strike}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#8a90a6', marginTop: '2px' }}>
+                      CE Option: {status.cpr_data.atm_strike} CE <br/>
+                      PE Option: {status.cpr_data.atm_strike} PE
+                    </div>
+                  </div>
+
+                  {/* Active Signal */}
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600, width: '100%' }}>Active Signal</div>
+                    <div style={{ 
+                      fontSize: '18px', 
+                      fontWeight: 800, 
+                      color: status.cpr_data.signal === 'Buy CE' ? '#00e676' : status.cpr_data.signal === 'Buy PE' ? '#ff1744' : '#8a90a6', 
+                      marginTop: '6px',
+                      background: status.cpr_data.signal === 'Buy CE' ? 'rgba(0, 230, 118, 0.08)' : status.cpr_data.signal === 'Buy PE' ? 'rgba(255, 23, 68, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+                      padding: '4px 16px',
+                      borderRadius: '8px',
+                      border: `1px solid ${status.cpr_data.signal === 'Buy CE' ? 'rgba(0, 230, 118, 0.15)' : status.cpr_data.signal === 'Buy PE' ? 'rgba(255, 23, 68, 0.15)' : 'rgba(255, 255, 255, 0.05)'}`,
+                      width: '80%'
+                    }}>
+                      {status.cpr_data.signal}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Open Positions Grid */}
             <div className="card-panel">
               <div className="panel-header">
@@ -868,9 +955,13 @@ export default function App() {
                   onChange={(e) => setChartSymbol(e.target.value)}
                   style={{ minWidth: '150px' }}
                 >
-                  {config.strategy?.symbols?.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {config.strategy?.strategy_type === 'cpr_intraday' ? (
+                    <option value="NIFTY">NIFTY</option>
+                  ) : (
+                    config.strategy?.symbols?.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))
+                  )}
                 </select>
               </div>
               
@@ -902,6 +993,7 @@ export default function App() {
                   <option value="fibonacci">VWAP + Fibonacci Pullback</option>
                   <option value="orb">Opening Range Breakout (ORB)</option>
                   <option value="vwap_pullback">VWAP Pullback - Nifty 50</option>
+                  <option value="cpr_intraday">CPR Intraday Strategy</option>
                 </select>
               </div>
 
@@ -912,9 +1004,13 @@ export default function App() {
                   value={btParams.symbol}
                   onChange={(e) => setBtParams({ ...btParams, symbol: e.target.value })}
                 >
-                  {config.strategy?.symbols?.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {btParams.strategy_type === 'cpr_intraday' ? (
+                    <option value="NIFTY">NIFTY</option>
+                  ) : (
+                    config.strategy?.symbols?.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))
+                  )}
                 </select>
               </div>
               
@@ -1199,6 +1295,7 @@ export default function App() {
                     <option value="fibonacci">VWAP + Fibonacci Pullback</option>
                     <option value="orb">Opening Range Breakout (ORB)</option>
                     <option value="vwap_pullback">VWAP Pullback - Nifty 50</option>
+                    <option value="cpr_intraday">CPR Intraday Strategy</option>
                   </select>
                 </div>
                 
@@ -1567,6 +1664,147 @@ export default function App() {
                         onChange={(e) => setConfig({
                           ...config,
                           vwap_pullback: { ...config.vwap_pullback, lookback_swings: parseInt(e.target.value) }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {config.strategy.strategy_type === 'cpr_intraday' && (
+                  <>
+                    <div style={{ background: 'rgba(0, 210, 255, 0.05)', border: '1px solid rgba(0, 210, 255, 0.15)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', color: '#00d2ff', fontSize: '13px' }}>
+                      <strong>NIFTY 50 Options Active</strong>: In CPR Strategy mode, stock watchlist scanning is bypassed and the bot trades ATM options on Nifty 50 exclusively.
+                    </div>
+
+                    <div className="form-group">
+                      <label>EMA Period</label>
+                      <input 
+                        type="number" 
+                        className="input-control"
+                        value={config.cpr_intraday?.ema_period || 20}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, ema_period: parseInt(e.target.value) || 20 }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Volume MA Period</label>
+                      <input 
+                        type="number" 
+                        className="input-control"
+                        value={config.cpr_intraday?.volume_period || 20}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, volume_period: parseInt(e.target.value) || 20 }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Volume Multiplier: {config.cpr_intraday?.volume_multiplier || 1.3}x</label>
+                      <input 
+                        type="range" 
+                        min="1.0"
+                        max="3.0"
+                        step="0.1"
+                        value={config.cpr_intraday?.volume_multiplier || 1.3}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, volume_multiplier: parseFloat(e.target.value) }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Narrow CPR Threshold (%): {config.cpr_intraday?.narrow_cpr_threshold || 0.05}%</label>
+                      <input 
+                        type="range" 
+                        min="0.01"
+                        max="0.20"
+                        step="0.01"
+                        value={config.cpr_intraday?.narrow_cpr_threshold || 0.05}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, narrow_cpr_threshold: parseFloat(e.target.value) }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Wide CPR Threshold (%): {config.cpr_intraday?.wide_cpr_threshold || 0.15}%</label>
+                      <input 
+                        type="range" 
+                        min="0.10"
+                        max="0.50"
+                        step="0.01"
+                        value={config.cpr_intraday?.wide_cpr_threshold || 0.15}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, wide_cpr_threshold: parseFloat(e.target.value) }
+                        })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Stop Loss Type</label>
+                      <select 
+                        className="input-control"
+                        value={config.cpr_intraday?.stop_loss_type || "logical"}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, stop_loss_type: e.target.value }
+                        })}
+                      >
+                        <option value="logical">Logical (CPR / Candle Low/High)</option>
+                        <option value="atr">ATR-Based SL</option>
+                      </select>
+                    </div>
+
+                    {config.cpr_intraday?.stop_loss_type === 'atr' && (
+                      <>
+                        <div className="form-group">
+                          <label>ATR Period</label>
+                          <input 
+                            type="number" 
+                            className="input-control"
+                            value={config.cpr_intraday?.atr_period || 14}
+                            onChange={(e) => setConfig({
+                              ...config,
+                              cpr_intraday: { ...config.cpr_intraday, atr_period: parseInt(e.target.value) || 14 }
+                            })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label>ATR Multiplier: {config.cpr_intraday?.atr_multiplier || 1.5}x</label>
+                          <input 
+                            type="range" 
+                            min="1.0"
+                            max="3.0"
+                            step="0.1"
+                            value={config.cpr_intraday?.atr_multiplier || 1.5}
+                            onChange={(e) => setConfig({
+                              ...config,
+                              cpr_intraday: { ...config.cpr_intraday, atr_multiplier: parseFloat(e.target.value) }
+                            })}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="form-group">
+                      <label>Risk-Reward Target: 1:{config.cpr_intraday?.risk_reward_ratio || 2.0}</label>
+                      <input 
+                        type="range" 
+                        min="1.5"
+                        max="4.0"
+                        step="0.5"
+                        value={config.cpr_intraday?.risk_reward_ratio || 2.0}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          cpr_intraday: { ...config.cpr_intraday, risk_reward_ratio: parseFloat(e.target.value) }
                         })}
                       />
                     </div>

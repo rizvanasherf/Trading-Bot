@@ -167,7 +167,13 @@ export default function FibonacciChart({ chartData }) {
           const colors = {
             '0.382': '#ffd54f',
             '0.5': '#81c784',
-            '0.618': '#2979ff'
+            '0.618': '#2979ff',
+            'Pivot': '#00d2ff',
+            'TC': '#b388ff',
+            'BC': '#b388ff',
+            'VWAP': '#00e676',
+            'EMA20': '#ff9100',
+            'EMA9': '#ff9100'
           };
 
           Object.entries(chartData.fib_levels).forEach(([ratio, price]) => {
@@ -177,7 +183,9 @@ export default function FibonacciChart({ chartData }) {
               lineWidth: 1,
               lineStyle: 1, // Dotted
               axisLabelVisible: true,
-              title: ratio.startsWith('OR') ? `${ratio} (₹${price.toFixed(2)})` : `Fib ${ratio} (₹${price.toFixed(2)})`,
+              title: ratio.match(/^(?:OR|Pivot|TC|BC|VWAP|EMA)/i) 
+                ? `${ratio} (₹${price.toFixed(2)})` 
+                : `Fib ${ratio} (₹${price.toFixed(2)})`,
             });
             priceLinesRef.current.push(line);
           });

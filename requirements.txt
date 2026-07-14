@@ -17,3 +17,4 @@ uvicorn
 smartapi-python>=1.3.4
 pyotp>=2.9.0
 schedule>=1.2.0
+yfinance

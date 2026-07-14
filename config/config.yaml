@@ -1,3 +1,4 @@
+cpr_intraday: null
 orb:
   end_time: 09:30
   max_range_pct: 0.02
@@ -31,7 +32,7 @@ strategy:
   lookback_candles: 150
   min_trend_strength: 2.5
   price_tolerance: 0.0025
-  strategy_type: vwap_pullback
+  strategy_type: cpr_intraday
   swing_threshold: 4
   symbols:
   - RELIANCE

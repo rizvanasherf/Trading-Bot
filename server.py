@@ -57,6 +57,7 @@ order_executor: Optional[OrderExecutor] = None
 scanning_active = False
 scanner_thread: Optional[threading.Thread] = None
 scanner_stop_event = threading.Event()
+latest_cpr_data = None
 
 def load_yaml_config() -> dict:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -87,6 +88,9 @@ def init_trading_components():
         strategy = ORBStrategy(global_config)
     elif strategy_type == "vwap_pullback":
         strategy = VWAPPullbackStrategy(global_config)
+    elif strategy_type == "cpr_intraday":
+        from core.cpr_strategy import CPRIntradayStrategy
+        strategy = CPRIntradayStrategy(global_config)
     else:
         strategy = FibonacciStrategy(global_config)
     
@@ -128,8 +132,13 @@ def run_scanning_loop():
                 continue
                 
             # 3. Fetch configurations
-            symbols = global_config["strategy"]["symbols"]
-            timeframe = global_config["strategy"]["timeframe"]
+            strategy_type = global_config["strategy"].get("strategy_type", "fibonacci")
+            if strategy_type == "cpr_intraday":
+                symbols = ["NIFTY"]
+                timeframe = "5minute"  # CPR options strategy uses 5m timeframe
+            else:
+                symbols = global_config["strategy"]["symbols"]
+                timeframe = global_config["strategy"]["timeframe"]
             
             # Fetch data concurrently for all symbols
             def fetch_symbol_data(sym):
@@ -171,6 +180,41 @@ def run_scanning_loop():
                                     logger.info(f"[{sym}] Target entry filled. {qty} shares @ {sig.entry_price}")
                 except Exception as e:
                     logger.error(f"Error scanning symbol {sym} strategy: {e}")
+
+            # If active strategy is cpr_intraday, update the global cpr_data from the scan result
+            if strategy_type == "cpr_intraday" and strategy is not None:
+                nifty_res = next((res for res in fetch_results if res[0] == "NIFTY"), None)
+                if nifty_res and nifty_res[2] is not None and not nifty_res[2].empty:
+                    try:
+                        sym, ltp, df = nifty_res
+                        cpr_vals = strategy.calculate_cpr("NIFTY")
+                        if cpr_vals:
+                            pivot, tc, bc = cpr_vals
+                            latest_close = float(df["close"].iloc[-1])
+                            vwap_series = strategy._calculate_vwap(df)
+                            latest_vwap = float(vwap_series.iloc[-1])
+                            ema_series = df["close"].ewm(span=strategy.ema_period, adjust=False).mean()
+                            latest_ema = float(ema_series.iloc[-1])
+                            atm_strike = int(round(latest_close / 50.0) * 50)
+                            
+                            signals = strategy.generate_signals("NIFTY", df)
+                            signal_str = "Wait"
+                            if signals:
+                                signal_str = "Buy CE" if signals[0].direction == "LONG" else "Buy PE"
+                                
+                            global latest_cpr_data
+                            latest_cpr_data = {
+                                "pivot": round(float(pivot), 2),
+                                "tc": round(float(tc), 2),
+                                "bc": round(float(bc), 2),
+                                "vwap": round(float(latest_vwap), 2),
+                                "ema20": round(float(latest_ema), 2),
+                                "atm_strike": int(atm_strike),
+                                "signal": signal_str,
+                                "spot_price": round(float(latest_close), 2)
+                            }
+                    except Exception as ex:
+                        logger.error(f"Error updating global CPR data in scanner: {ex}")
             
             # 4. Update open positions P&L and process exits
             closed_trades = order_executor.update_positions_pnl(ltps)
@@ -199,6 +243,7 @@ class ConfigModel(BaseModel):
     strategy: dict
     orb: Optional[dict] = None
     vwap_pullback: Optional[dict] = None
+    cpr_intraday: Optional[dict] = None
 
 class AngelAuthModel(BaseModel):
     api_key: str
@@ -210,7 +255,7 @@ class AngelAuthModel(BaseModel):
 
 @app.get("/api/status")
 def get_status():
-    global scanning_active
+    global scanning_active, latest_cpr_data
     angel_connected = optimized_client.session.is_connected()
     api_status = "Connected" if angel_connected else "Disconnected"
     return {
@@ -219,7 +264,8 @@ def get_status():
         "trading_mode": "live" if settings.is_live else "paper",
         "api_connected": angel_connected,
         "api_status": api_status,
-        "last_checked": now_ist().strftime("%Y-%m-%d %H:%M:%S")
+        "last_checked": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
+        "cpr_data": latest_cpr_data
     }
 
 @app.get("/api/diagnostics")
@@ -560,6 +606,34 @@ def get_chart_data(symbol: str):
             }
             orh = curr_vwap
             orl = curr_ema
+            
+        elif strategy_type == "cpr_intraday":
+            vwap = strategy._calculate_vwap(df_chart)
+            ema = df_chart["close"].ewm(span=strategy.ema_period, adjust=False).mean()
+            
+            curr_vwap = float(vwap.iloc[-1])
+            curr_ema = float(ema.iloc[-1])
+            
+            # Retrieve daily CPR levels
+            cpr_vals = strategy.calculate_cpr(symbol)
+            if cpr_vals:
+                pivot, tc, bc = cpr_vals
+                fib_levels = {
+                    "Pivot": float(pivot),
+                    "TC": float(tc),
+                    "BC": float(bc),
+                    "VWAP": curr_vwap,
+                    "EMA20": curr_ema
+                }
+                orh = float(tc)
+                orl = float(bc)
+            else:
+                fib_levels = {
+                    "VWAP": curr_vwap,
+                    "EMA20": curr_ema
+                }
+                orh = curr_vwap
+                orl = curr_ema
                 
         for idx, (t, row) in enumerate(df_chart.iterrows()):
             candles.append({
@@ -597,8 +671,8 @@ def run_backtest_endpoint(bt_params: dict):
         
         strategy_type = bt_params.get("strategy_type", "fibonacci")
         
-        # Load historical candles once
-        df_bt = data_fetcher.get_historical_data(bt_symbol, interval=bt_tf, days=bt_days)
+        # Load historical candles once using Yahoo Finance
+        df_bt = data_fetcher.get_historical_data_yfinance(bt_symbol, interval=bt_tf, days=bt_days)
         if df_bt.empty or len(df_bt) < 40:
             raise HTTPException(status_code=400, detail="Insufficient historical data returned for backtesting.")
 

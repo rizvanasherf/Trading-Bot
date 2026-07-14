@@ -96,15 +96,35 @@ class AngelConnector:
             if res.status_code == 200:
                 data = res.json()
                 temp_map = {}
+                
+                # Hardcoded fallback for Nifty 50 spot index
+                temp_map["NIFTY"] = ("99926009", "Nifty 50")
+                temp_map["NIFTY 50"] = ("99926009", "Nifty 50")
+                
                 for item in data:
-                    # Filter for NSE segment
-                    if item.get("exch_seg") == "NSE" and item.get("instrumenttype") == "":
-                        sym = item.get("name", "")  # e.g. "SBIN"
-                        trading_sym = item.get("symbol", "")  # e.g. "SBIN-EQ"
-                        token = item.get("token", "")
-                        if sym and token:
-                            # Cache both base name and full symbol name
-                            temp_map[sym.upper()] = (token, trading_sym)
+                    exch_seg = item.get("exch_seg")
+                    inst_type = item.get("instrumenttype")
+                    symbol_name = item.get("name", "")
+                    trading_sym = item.get("symbol", "")
+                    token = item.get("token", "")
+                    
+                    if not token:
+                        continue
+                    
+                    # Filter for NSE segment equities
+                    if exch_seg == "NSE" and inst_type == "":
+                        if symbol_name:
+                            temp_map[symbol_name.upper()] = (token, trading_sym)
+                            temp_map[trading_sym.upper()] = (token, trading_sym)
+                            
+                    # Nifty 50 Spot Index mapping
+                    elif exch_seg == "NSE" and (trading_sym == "Nifty 50" or symbol_name == "Nifty 50" or symbol_name == "Nifty Index"):
+                        temp_map["NIFTY"] = (token, trading_sym)
+                        temp_map["NIFTY 50"] = (token, trading_sym)
+                        
+                    # Nifty Options mapping (OPTIDX)
+                    elif exch_seg == "NFO" and symbol_name == "NIFTY" and inst_type == "OPTIDX":
+                        if trading_sym:
                             temp_map[trading_sym.upper()] = (token, trading_sym)
                 
                 self.token_map = temp_map
@@ -135,6 +155,55 @@ class AngelConnector:
             return self.token_map[eq_symbol]
             
         return None, None
+
+    def get_exchange(self, symbol: str) -> str:
+        """Get the exchange segment for a symbol (NSE or NFO)."""
+        symbol_upper = symbol.strip().upper()
+        if ("CE" in symbol_upper or "PE" in symbol_upper) and "NIFTY" in symbol_upper:
+            return "NFO"
+        return "NSE"
+
+    def resolve_atm_option(self, symbol: str, strike: int, opt_type: str) -> Optional[Tuple[str, str]]:
+        """
+        Find the nearest active expiry option contract for Nifty 50 from the cache.
+        Returns (token, trading_symbol).
+        """
+        import datetime
+        clean_symbol = symbol.strip().upper()
+        if clean_symbol != "NIFTY" and clean_symbol != "NIFTY 50":
+            return None
+            
+        opt_suffix = f"{strike}{opt_type.upper()}"
+        matches = []
+        
+        # Search token map for matches
+        for key, val in self.token_map.items():
+            token, trading_sym = val
+            trading_sym_upper = trading_sym.upper()
+            if trading_sym_upper.startswith("NIFTY") and trading_sym_upper.endswith(opt_suffix):
+                # Try to parse the expiry from NIFTYddMMMyySTRIKECE (e.g. NIFTY06DEC2325350CE -> expiry "06DEC23")
+                try:
+                    expiry_str = trading_sym_upper[5:12] # characters 5 to 12
+                    exp_date = datetime.datetime.strptime(expiry_str, "%d%b%y").date()
+                    
+                    if exp_date >= datetime.date.today():
+                        matches.append((token, trading_sym, exp_date))
+                except Exception:
+                    continue
+                    
+        if not matches:
+            # Fallback to key exact match search if strict date parsing failed
+            for key, val in self.token_map.items():
+                token, trading_sym = val
+                if trading_sym.upper().startswith("NIFTY") and trading_sym.upper().endswith(opt_suffix):
+                    matches.append((token, trading_sym, datetime.date.max))
+                    
+        if not matches:
+            return None
+            
+        # Sort matches by expiry date ascending and return the closest one
+        matches.sort(key=lambda x: x[2])
+        return matches[0][0], matches[0][1]
 
     def _start_scheduler(self):
         """Start background daemon thread to run scheduled reconnect daily at 9:00 AM IST."""

@@ -67,8 +67,42 @@ class OrderExecutor:
             logger.warning(f"[{signal.symbol}] Skipping entry – qty=0.")
             return None
 
+        # Options routing if CPR Intraday strategy is active
+        import server
+        strategy_type = server.global_config.get("strategy", {}).get("strategy_type", "")
+        is_options_trade = (strategy_type == "cpr_intraday" and signal.symbol == "NIFTY")
+
+        opt_token = None
+        opt_trading_symbol = None
+        opt_ltp = None
+
+        if is_options_trade:
+            strike = int(round(signal.entry_price / 50.0) * 50)
+            opt_type = "CE" if signal.direction == Direction.LONG else "PE"
+            
+            opt_info = connector.resolve_atm_option("NIFTY", strike, opt_type)
+            if not opt_info:
+                # Mock fallback
+                opt_token = f"MOCK_{strike}_{opt_type}"
+                opt_trading_symbol = f"NIFTY26JUL26{strike}{opt_type}"
+                opt_ltp = 150.0
+            else:
+                opt_token, opt_trading_symbol = opt_info
+                from src.data.optimized_client import optimized_client
+                try:
+                    opt_ltp = optimized_client.get_ltp(opt_trading_symbol)
+                except Exception:
+                    opt_ltp = 150.0
+            
+            # Recalculate signal values for options premium
+            signal.entry_price = opt_ltp
+            risk_amt = opt_ltp * 0.20  # 20% premium risk
+            signal.stop_loss = round(opt_ltp - risk_amt, 2)
+            signal.target = round(opt_ltp + risk_amt * 2.0, 2)
+            logger.info(f"[Order Executor] Routing NIFTY spot signal to option: {opt_trading_symbol} @ ₹{opt_ltp} (SL: {signal.stop_loss}, Target: {signal.target})")
+
         pos = Position(
-            symbol=signal.symbol,
+            symbol=opt_trading_symbol if is_options_trade else signal.symbol,
             direction=signal.direction,
             qty=qty,
             entry_price=signal.entry_price,
@@ -80,7 +114,12 @@ class OrderExecutor:
 
         if settings.is_live and connector.smart is not None:
             try:
-                token, trading_symbol = connector.get_token_info(signal.symbol)
+                if is_options_trade:
+                    token = opt_token
+                    trading_symbol = opt_trading_symbol
+                else:
+                    token, trading_symbol = connector.get_token_info(signal.symbol)
+                    
                 if not token:
                     raise ValueError(f"Token not found for {signal.symbol}")
 
@@ -92,13 +131,13 @@ class OrderExecutor:
                 else:
                     limit_price = round(signal.entry_price * 0.999, 2)
 
-                logger.info(f"[{signal.symbol}] Placing live Angel One LIMIT entry order: {transaction} {qty} shares @ ₹{limit_price}")
+                logger.info(f"[{trading_symbol}] Placing live Angel One LIMIT entry order: {transaction} {qty} contracts/shares @ ₹{limit_price}")
                 params = {
                     "variety": "NORMAL",
                     "tradingsymbol": trading_symbol,
                     "symboltoken": token,
                     "transactiontype": transaction,
-                    "exchange": "NSE",
+                    "exchange": connector.get_exchange(trading_symbol),
                     "ordertype": "LIMIT",
                     "producttype": "INTRADAY",
                     "duration": "DAY",
@@ -147,7 +186,7 @@ class OrderExecutor:
                 "tradingsymbol": trading_symbol,
                 "symboltoken": token,
                 "transactiontype": transaction,
-                "exchange": "NSE",
+                "exchange": connector.get_exchange(trading_symbol),
                 "ordertype": "STOPLOSS_LIMIT",
                 "producttype": "INTRADAY",
                 "duration": "DAY",
@@ -170,7 +209,7 @@ class OrderExecutor:
                 "tradingsymbol": trading_symbol,
                 "symboltoken": token,
                 "transactiontype": transaction,
-                "exchange": "NSE",
+                "exchange": connector.get_exchange(trading_symbol),
                 "ordertype": "LIMIT",
                 "producttype": "INTRADAY",
                 "duration": "DAY",
@@ -287,7 +326,7 @@ class OrderExecutor:
                         "tradingsymbol": trading_symbol,
                         "symboltoken": token,
                         "transactiontype": transaction,
-                        "exchange": "NSE",
+                        "exchange": connector.get_exchange(trading_symbol),
                         "ordertype": "LIMIT",
                         "producttype": "INTRADAY",
                         "duration": "DAY",
@@ -348,7 +387,7 @@ class OrderExecutor:
                         "tradingsymbol": trading_symbol,
                         "symboltoken": token,
                         "transactiontype": transaction,
-                        "exchange": "NSE",
+                        "exchange": connector.get_exchange(trading_symbol),
                         "ordertype": "LIMIT",
                         "producttype": "INTRADAY",
                         "duration": "DAY",

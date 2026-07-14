@@ -49,7 +49,6 @@ export default function AnalysisDashboard({ apiBase }) {
   useEffect(() => {
     if (!apiBase) {
       setLoading(false);
-      setIsDemoMode(true);
       return;
     }
 
@@ -59,7 +58,6 @@ export default function AnalysisDashboard({ apiBase }) {
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setRealTrades(data);
-          setIsDemoMode(false);
           
           // Pre-select all parsed unique symbols
           const uniqueSymbols = Array.from(new Set(data.map(t => t.symbol)));
@@ -69,18 +67,15 @@ export default function AnalysisDashboard({ apiBase }) {
           });
           setSelectedStrats(defaultSelected);
         } else {
-          // Fall back to demo mode if empty
-          setIsDemoMode(true);
-          const defaultSelected = { bullish: true, bearish: true, risk_manager: true };
-          setSelectedStrats(defaultSelected);
+          setRealTrades([]);
+          setSelectedStrats({});
         }
         setLoading(false);
       })
       .catch(err => {
         console.error("Failed to fetch historical trades for analysis:", err);
-        setIsDemoMode(true);
-        const defaultSelected = { bullish: true, bearish: true, risk_manager: true };
-        setSelectedStrats(defaultSelected);
+        setRealTrades([]);
+        setSelectedStrats({});
         setLoading(false);
       });
   }, [apiBase, refreshTrigger]);
@@ -599,50 +594,54 @@ export default function AnalysisDashboard({ apiBase }) {
 
         {/* Toggle & Refresh Actions */}
         <div style={{ display: 'flex', gap: '10px' }}>
-          {!isDemoMode && (
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => setRefreshTrigger(prev => prev + 1)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <RefreshCw size={14} />
-              Refresh
-            </button>
-          )}
           <button 
-            className="btn btn-primary" 
-            onClick={() => {
-              if (isDemoMode) {
-                // If switching to Real, verify if we have data
-                if (realTrades.length > 0) {
-                  setIsDemoMode(false);
-                  const uniqueSymbols = Array.from(new Set(realTrades.map(t => t.symbol)));
-                  const defaultSelected = {};
-                  uniqueSymbols.forEach(sym => { defaultSelected[sym] = true; });
-                  setSelectedStrats(defaultSelected);
-                } else {
-                  alert("No real trade logs available in trade_history.csv yet. Execute some paper or live trades first.");
-                }
-              } else {
-                setIsDemoMode(true);
-                setSelectedStrats({ bullish: true, bearish: true, risk_manager: true });
-              }
-            }}
+            className="btn btn-secondary" 
+            onClick={() => setRefreshTrigger(prev => prev + 1)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
-            {isDemoMode ? 'Show Real Trades' : 'Show Demo Data'}
+            <RefreshCw size={14} />
+            Refresh
           </button>
         </div>
       </div>
 
-      {/* Warning banner if real trades are empty and we default to demo */}
-      {realTrades.length === 0 && !isDemoMode && (
-        <div style={{ background: 'rgba(255, 145, 0, 0.1)', border: '1px solid rgba(255, 145, 0, 0.25)', borderRadius: '12px', padding: '12px 18px', color: '#ff9100', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Info size={16} />
-          <span>No historical trades found in <code>logs/trade_history.csv</code>. Displaying demo strategy metrics.</span>
+      {/* Empty State Callout when there is no trade history */}
+      {realTrades.length === 0 && (
+        <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '12px', padding: '40px 24px', textAlign: 'center', color: '#8a90a6', marginBottom: '24px' }}>
+          <Info size={32} style={{ color: '#00d2ff', marginBottom: '12px' }} />
+          <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>No Trade History Available</h3>
+          <p style={{ fontSize: '13px', margin: 0 }}>Execute some paper or live trades in the dashboard first to view automated historical statistics and metrics.</p>
         </div>
       )}
 
       {/* Strategies / Symbols Checkboxes Selector */}
+      {activeStrategies.length > 0 && (
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
+            onClick={() => {
+              const allSelected = {};
+              activeStrategies.forEach(s => { allSelected[s.id] = true; });
+              setSelectedStrats(allSelected);
+            }}
+          >
+            Select All
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
+            onClick={() => {
+              setSelectedStrats({});
+            }}
+          >
+            Unselect All
+          </button>
+        </div>
+      )}
+
       <div className="strategies-selector">
         {activeStrategies.map(strat => {
           const isActive = selectedStrats[strat.id];

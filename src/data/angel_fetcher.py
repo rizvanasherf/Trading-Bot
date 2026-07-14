@@ -96,7 +96,7 @@ class AngelHistoricalFetcher:
                 time.sleep(0.35)
 
             params = {
-                "exchange": "NSE",
+                "exchange": connector.get_exchange(symbol),
                 "symboltoken": token,
                 "interval": angel_interval,
                 "fromdate": from_dt.strftime("%Y-%m-%d %H:%M"),
@@ -120,6 +120,7 @@ class AngelHistoricalFetcher:
                 logger.error(f"[{symbol}] Exception during API chunk fetch: {e}")
 
         if not all_dfs:
+            self.cache.set_df(cache_key, pd.DataFrame(), 15)
             return pd.DataFrame()
 
         # Concatenate and clean chunks
