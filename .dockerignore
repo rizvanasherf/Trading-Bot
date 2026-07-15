@@ -1,0 +1,28 @@
+# Git & workflow
+.git
+.gitignore
+.agents
+.gemini
+README.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+tests/
+
+# Node / Frontend build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Sensitive data / configuration
+.env
+.env.example
+logs/*
+!logs/trade_history.csv
+scratch/

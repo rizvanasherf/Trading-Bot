@@ -8,7 +8,7 @@ import FibonacciChart from './components/FibonacciChart';
 import AnalysisDashboard from './components/AnalysisDashboard';
 import './App.css';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+const API_BASE = '/api';
 
 const renderDateTime = (dtStr) => {
   if (!dtStr || dtStr === "N/A") return <span>N/A</span>;
