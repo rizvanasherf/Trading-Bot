@@ -147,6 +147,12 @@ class CPRIntradayStrategy:
         if is_wide:
             vol_check = curr_volume > (df["vol_ma"].iloc[-1] * self.volume_multiplier * 1.5)
             
+        # Fallback for Index Spot trading (like NIFTY) which lacks volume and VWAP
+        is_index = symbol.upper() in ("NIFTY", "NIFTY 50", "NIFTY_50", "BANKNIFTY", "FINNIFTY") or df["volume"].sum() == 0
+        if is_index:
+            vol_check = True  # Bypass volume check as volume is always 0
+            curr_vwap = df["ema"].iloc[-1]  # Fallback to EMA 20 instead of VWAP
+            
         # Check trading window (9:20 AM - 2:45 PM)
         curr_time = now_ist().time()
         start_trade_time = datetime.time(9, 20)
