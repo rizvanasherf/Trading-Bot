@@ -35,7 +35,8 @@ class Position:
     ltp: float = 0.0
     pnl: float = 0.0
     entry_time: datetime = field(default_factory=now_ist)
-    status: str = "OPEN"   # OPEN | CLOSED_SL | CLOSED_TARGET | CLOSED_SQUAREOFF
+    status: str = "PENDING_FILL"   # PENDING_FILL | OPEN | FAILED | CLOSED_SL | CLOSED_TARGET | CLOSED_SQUAREOFF
+    entry_order_id: Optional[str] = None
 
     def update_pnl(self, ltp: float) -> None:
         self.ltp = ltp
@@ -148,15 +149,16 @@ class OrderExecutor:
                 response = self._place_order_live(params)
                 if response.get("status") is True:
                     order_id = response["data"]["orderid"]
-                    logger.success(f"[{signal.symbol}] Live ENTRY order placed. ID={order_id}")
-                    self._place_sl_order(signal, qty, token, trading_symbol)
-                    self._place_target_order(signal, qty, token, trading_symbol)
+                    pos.entry_order_id = order_id
+                    pos.status = "PENDING_FILL"
+                    logger.success(f"[{signal.symbol}] Live ENTRY order placed. ID={order_id}. Waiting for fill confirmation...")
                 else:
                     raise ValueError(response.get("message", "Order rejected by exchange"))
             except Exception as exc:
                 logger.error(f"[{signal.symbol}] Live order failed: {exc}")
                 return None
         else:
+            pos.status = "OPEN"
             logger.info(
                 f"[PAPER] {signal.direction} {qty}×{signal.symbol} "
                 f"@ ₹{signal.entry_price} | SL ₹{signal.stop_loss} | TGT ₹{signal.target}"
@@ -220,6 +222,61 @@ class OrderExecutor:
         except Exception as exc:
             logger.error(f"[{signal.symbol}] Target order placement failed: {exc}")
 
+    def _place_sl_order_for_pos(self, pos: Position, token: str, trading_symbol: str) -> None:
+        if not (settings.is_live and connector.smart is not None):
+            return
+        try:
+            transaction = "SELL" if pos.direction == Direction.LONG else "BUY"
+            if pos.direction == Direction.LONG:
+                limit_price = round(pos.stop_loss * 0.999, 2)
+            else:
+                limit_price = round(pos.stop_loss * 1.001, 2)
+
+            logger.info(f"[{pos.symbol}] Placing live Stoploss order: {transaction} {pos.qty} @ ₹{limit_price}")
+            params = {
+                "variety": "STOPLOSS",
+                "tradingsymbol": trading_symbol,
+                "symboltoken": token,
+                "transactiontype": transaction,
+                "exchange": connector.get_exchange(trading_symbol),
+                "ordertype": "STOPLOSS_LIMIT",
+                "producttype": "INTRADAY",
+                "duration": "DAY",
+                "triggerprice": round(pos.stop_loss, 2),
+                "price": limit_price,
+                "quantity": pos.qty
+            }
+            self._place_order_live(params)
+        except Exception as exc:
+            logger.error(f"[{pos.symbol}] SL order placement failed: {exc}")
+
+    def _place_target_order_for_pos(self, pos: Position, token: str, trading_symbol: str) -> None:
+        if not (settings.is_live and connector.smart is not None):
+            return
+        try:
+            transaction = "SELL" if pos.direction == Direction.LONG else "BUY"
+            if pos.direction == Direction.LONG:
+                limit_price = round(pos.target * 0.999, 2)
+            else:
+                limit_price = round(pos.target * 1.001, 2)
+
+            logger.info(f"[{pos.symbol}] Placing live Target limit order: {transaction} {pos.qty} @ ₹{limit_price}")
+            params = {
+                "variety": "NORMAL",
+                "tradingsymbol": trading_symbol,
+                "symboltoken": token,
+                "transactiontype": transaction,
+                "exchange": connector.get_exchange(trading_symbol),
+                "ordertype": "LIMIT",
+                "producttype": "INTRADAY",
+                "duration": "DAY",
+                "price": limit_price,
+                "quantity": pos.qty
+            }
+            self._place_order_live(params)
+        except Exception as exc:
+            logger.error(f"[{pos.symbol}] Target order placement failed: {exc}")
+
     def _log_closed_trade(self, pos: Position, exit_price: float) -> None:
         """Append closed trade details to logs/trade_history.csv."""
         import os
@@ -264,6 +321,46 @@ class OrderExecutor:
         squareoff = is_after_squareoff()
 
         for pos_id, pos in list(self._positions.items()):
+            # Handle PENDING_FILL state: check if live entry order is completed/rejected/cancelled
+            if pos.status == "PENDING_FILL":
+                if settings.is_live and connector.smart is not None and pos.entry_order_id:
+                    try:
+                        order_book = self._get_order_book_live()
+                        if order_book and order_book.get("status") is True:
+                            orders = order_book.get("data", [])
+                            match_order = next((o for o in orders if o.get("orderid") == pos.entry_order_id), None)
+                            if match_order:
+                                ord_status = match_order.get("status")
+                                if ord_status == "complete":
+                                    logger.success(f"[{pos.symbol}] Live ENTRY order {pos.entry_order_id} filled! Placing Stoploss & Target...")
+                                    pos.status = "OPEN"
+                                    # Retrieve correct token details
+                                    token = match_order.get("symboltoken")
+                                    trading_symbol = match_order.get("tradingsymbol")
+                                    self._place_sl_order_for_pos(pos, token, trading_symbol)
+                                    self._place_target_order_for_pos(pos, token, trading_symbol)
+                                elif ord_status in ("rejected", "cancelled"):
+                                    logger.error(f"[{pos.symbol}] Live ENTRY order {pos.entry_order_id} was {ord_status.upper()}: {match_order.get('text')}")
+                                    pos.status = "FAILED"
+                                    if pos.id in self._positions:
+                                        del self._positions[pos.id]
+                                    continue
+                                else:
+                                    # Still pending. Cancel if it stays pending for > 5 minutes (300s)
+                                    elapsed = (now_ist() - pos.entry_time).total_seconds()
+                                    if elapsed > 300:
+                                        logger.warning(f"[{pos.symbol}] Live ENTRY order {pos.entry_order_id} pending too long. Cancelling...")
+                                        self._cancel_order_live("NORMAL", pos.entry_order_id)
+                                        pos.status = "FAILED"
+                                        if pos.id in self._positions:
+                                            del self._positions[pos.id]
+                                        continue
+                    except Exception as err:
+                        logger.error(f"Error checking pending order {pos.entry_order_id}: {err}")
+                else:
+                    # Non-live or mock/fallback
+                    pos.status = "OPEN"
+
             if pos.status != "OPEN":
                 continue
 

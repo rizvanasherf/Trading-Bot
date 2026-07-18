@@ -33,7 +33,7 @@ from core.order_executor import OrderExecutor, Position
 from core.backtester import Backtester
 from utils.logger import logger
 
-from utils.helpers import fmt_inr, fmt_pct, now_ist, is_market_open, is_after_squareoff
+from utils.helpers import fmt_inr, fmt_pct, now_ist, is_market_open, is_after_squareoff, IdempotencyTracker
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Page Configurations & Design
@@ -187,6 +187,7 @@ def init_trading_components():
         capital=capital_val
     )
     st.session_state.order_executor = OrderExecutor(kite=st.session_state.data_fetcher._kite)
+    st.session_state.signal_tracker = IdempotencyTracker()
     st.session_state.initialized = True
 
 if "initialized" not in st.session_state or st.sidebar.button("Force Reload Modules"):
@@ -364,10 +365,24 @@ with tab_live:
                     # Check if already open
                     open_syms = [p.symbol for p in st.session_state.order_executor.open_positions]
                     if sym not in open_syms:
+                        atr_val = None
+                        try:
+                            atr_series = st.session_state.strategy._atr(df_hist)
+                            if not atr_series.empty:
+                                atr_val = float(atr_series.iloc[-1])
+                        except Exception as ex:
+                            logger.error(f"Error calculating ATR for sizing: {ex}")
+                        
                         qty = st.session_state.risk_manager.calculate_position_size(
-                            sym, sig.entry_price, sig.stop_loss
+                            sym, sig.entry_price, sig.stop_loss, atr=atr_val
                         )
                         if qty > 0:
+                            # Idempotency deduplication check
+                            date_str = sig.timestamp.strftime("%Y-%m-%d")
+                            if not st.session_state.signal_tracker.check_and_add(sym, sig.direction.value, date_str):
+                                logger.info(f"[{sym}] Signal for {sig.direction.value} already executed today. Skipping double placement.")
+                                continue
+                            
                             pos = st.session_state.order_executor.execute_entry(sig, qty)
                             if pos:
                                 st.session_state.risk_manager.add_position_exposure(sym, qty * sig.entry_price)

@@ -70,3 +70,40 @@ def fmt_pct(value: float, decimals: int = 2) -> str:
 def pnl_color(value: float) -> str:
     """Returns 'green' or 'red' string for Streamlit metric delta."""
     return "normal" if value >= 0 else "inverse"
+
+
+class IdempotencyTracker:
+    def __init__(self, filepath: str = "logs/placed_signals.json"):
+        self.filepath = filepath
+        import os
+        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+        self.signals_keys = self._load()
+
+    def _load(self) -> set:
+        import os
+        import json
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, "r") as f:
+                    data = json.load(f)
+                    return set(data)
+            except Exception:
+                return set()
+        return set()
+
+    def _save(self) -> None:
+        import json
+        try:
+            with open(self.filepath, "w") as f:
+                json.dump(list(self.signals_keys), f)
+        except Exception:
+            pass
+
+    def check_and_add(self, symbol: str, direction: str, date_str: str) -> bool:
+        """Returns True if the signal is new and added, False if it was already processed today."""
+        key = f"{symbol}_{direction}_{date_str}"
+        if key in self.signals_keys:
+            return False
+        self.signals_keys.add(key)
+        self._save()
+        return True

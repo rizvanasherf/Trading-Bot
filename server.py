@@ -31,7 +31,9 @@ from core.risk_manager import RiskManager
 from core.order_executor import OrderExecutor, Position
 from core.backtester import Backtester
 from utils.logger import logger
-from utils.helpers import fmt_inr, now_ist, is_after_squareoff
+from utils.helpers import fmt_inr, now_ist, is_after_squareoff, IdempotencyTracker
+
+signal_tracker = IdempotencyTracker()
 
 app = FastAPI(title="Fib Trader Backend API")
 
@@ -172,8 +174,23 @@ def run_scanning_loop():
                         open_syms = [p.symbol for p in order_executor.open_positions]
                         
                         if sym not in open_syms:
-                            qty = risk_manager.calculate_position_size(sym, sig.entry_price, sig.stop_loss)
+                            # Volatility-adjusted sizing
+                            atr_val = None
+                            try:
+                                atr_series = strategy._atr(df_hist)
+                                if not atr_series.empty:
+                                    atr_val = float(atr_series.iloc[-1])
+                            except Exception as ex:
+                                logger.error(f"Error calculating ATR for sizing: {ex}")
+                            
+                            qty = risk_manager.calculate_position_size(sym, sig.entry_price, sig.stop_loss, atr=atr_val)
                             if qty > 0:
+                                # Idempotency deduplication check
+                                date_str = sig.timestamp.strftime("%Y-%m-%d")
+                                if not signal_tracker.check_and_add(sym, sig.direction.value, date_str):
+                                    logger.info(f"[{sym}] Signal for {sig.direction.value} already executed today. Skipping double placement.")
+                                    continue
+                                
                                 pos = order_executor.execute_entry(sig, qty)
                                 if pos:
                                     risk_manager.add_position_exposure(sym, qty * sig.entry_price)

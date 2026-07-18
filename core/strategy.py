@@ -85,6 +85,8 @@ class FibonacciStrategy:
         self.fib_zone: float = strat.get("fib_zone", 0.002)
         self.confirmation_type: str = strat.get("confirmation_type", "reversal_candle")
         self.volume_period: int = strat.get("volume_period", 20)
+        self.use_adx_filter: bool = strat.get("use_adx_filter", True)
+        self.adx_threshold: float = strat.get("adx_threshold", 20.0)
 
         # Filter levels to pullback levels: 38.2%, 50%, 61.8%
         raw_levels = strat.get("fib_levels", self.RETRACEMENT_RATIOS)
@@ -258,6 +260,34 @@ class FibonacciStrategy:
                          (low - prev_close).abs()], axis=1).max(axis=1)
         return tr.rolling(period).mean()
 
+    @staticmethod
+    def _adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
+        high = df["high"]
+        low = df["low"]
+        close = df["close"]
+        
+        plus_dm = high.diff()
+        minus_dm = low.diff()
+        
+        plus_dm_clean = np.where((plus_dm > 0) & (plus_dm > minus_dm.abs()), plus_dm, 0.0)
+        minus_dm_clean = np.where((minus_dm < 0) & (minus_dm.abs() > plus_dm), minus_dm.abs(), 0.0)
+        
+        prev_close = close.shift(1)
+        tr = pd.concat([high - low,
+                         (high - prev_close).abs(),
+                         (low - prev_close).abs()], axis=1).max(axis=1)
+        
+        tr_smooth = tr.rolling(period).sum()
+        plus_dm_smooth = pd.Series(plus_dm_clean, index=df.index).rolling(period).sum()
+        minus_dm_smooth = pd.Series(minus_dm_clean, index=df.index).rolling(period).sum()
+        
+        plus_di = 100 * (plus_dm_smooth / (tr_smooth + 1e-9))
+        minus_di = 100 * (minus_dm_smooth / (tr_smooth + 1e-9))
+        
+        dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-9)
+        adx = dx.rolling(period).mean()
+        return adx
+
     # ── Main signal generator ──────────────────────────────────────────────────
 
     def generate_signals(self, symbol: str, df: pd.DataFrame) -> List[Signal]:
@@ -266,6 +296,15 @@ class FibonacciStrategy:
         """
         if len(df) < max(self.swing_threshold * 2 + 20, self.volume_period):
             return []
+
+        # ── ADX Regime Filter ──
+        if self.use_adx_filter:
+            adx_series = self._adx(df)
+            if not adx_series.empty:
+                current_adx = adx_series.iloc[-1]
+                if pd.notna(current_adx) and current_adx < self.adx_threshold:
+                    logger.info(f"[{symbol}] Skipping signals: Market is range-bound/choppy (ADX: {current_adx:.2f} < {self.adx_threshold})")
+                    return []
 
         signals: List[Signal] = []
         atr = self._atr(df)

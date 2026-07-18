@@ -64,14 +64,29 @@ class RiskManager:
         entry_price: float,
         stop_loss: float,
         current_capital: Optional[float] = None,
+        atr: Optional[float] = None,
     ) -> int:
         """
         Returns number of shares to trade.
-        Risk per trade = risk_per_trade * capital.
+        Risk per trade = risk_per_trade * capital (adjusted dynamically for high volatility).
         Also caps stock concentration at max_stock_concentration.
         """
         cap = current_capital or self.capital
-        risk_amount = cap * self.risk_per_trade
+        risk_per_trade = self.risk_per_trade
+
+        # Dynamic volatility scaling: reduce risk amount if ATR/Price exceeds baseline (1.5%)
+        if atr is not None and entry_price > 0:
+            natr = atr / entry_price
+            baseline_vol = 0.015
+            if natr > baseline_vol:
+                scaling_factor = max(baseline_vol / natr, 0.25)
+                risk_per_trade = self.risk_per_trade * scaling_factor
+                logger.info(
+                    f"[{symbol}] High volatility detected (ATR/Price: {natr*100:.2f}%). "
+                    f"Scaling risk down to {risk_per_trade*100:.3f}% (factor: {scaling_factor:.2f})."
+                )
+
+        risk_amount = cap * risk_per_trade
         price_risk = abs(entry_price - stop_loss)
 
         if price_risk <= 0:
