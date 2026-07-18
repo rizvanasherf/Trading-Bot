@@ -37,23 +37,20 @@ fib_trader/
 
 1. **Dual Trading Mode**:
    - `paper`: Tracks open and closed positions in-memory, updating PnL via simulated ticks.
-   - `live`: Places MIS market entry orders and matching limit target/stop-loss orders using the Zerodha Kite Connect API.
-2. **Fibonacci Strategy Engine**:
-   - Dynamically calculates swing high and swing low points over a configurable lookback window.
-   - Computes retracement (23.6%, 38.2%, 50%, 61.8%, 78.6%) and extension (127.2%, 161.8%) levels.
-   - Verifies entry with volume-backed confirmation candles.
-3. **Rigorous Risk Controls**:
-   - Position sizing based on a fixed risk capital limit (e.g., 1% loss limit per trade).
-   - Concentration cap: Prevents exposure to a single stock from exceeding 20% of capital.
-   - Circuit breakers: Halts trading if daily loss limit (e.g., 3%) or max daily trades or consecutive loss count is breached.
-   - Auto-squareoff: Closes all active MIS positions at 3:15 PM IST.
-4. **Visual Dashboard**:
-   - Real-time performance metrics card grid.
-   - Interactive Plotly candlestick chart mapping swing points and Fibonacci levels.
-   - Live log viewer reading from rotating logs.
-   - Interactive YAML configuration editor.
-5. **Robust OAuth Connection**:
-   - Simple step-by-step manager to copy login links, enter request tokens, and dynamically save generated access tokens directly to your `.env` configuration.
+   - `live`: Places MIS market entry orders and matching limit target/stop-loss orders using the Angel One SmartAPI.
+2. **Advanced Strategy & Regime Filters**:
+   - **ADX Trend Regime Filter**: Automatically scans the average directional index; suppresses Fibonacci trades in range-bound/choppy markets (ADX < 20) to prevent whipsaw losses.
+   - **Fibonacci Retracement Logic**: Calculates real-time swing highs and lows, Fibonacci levels (38.2%, 50%, 61.8%), and target extensions.
+3. **Smart Position Sizing & Risk Controls**:
+   - **Volatility-Adjusted Sizing**: Automatically reduces trade size using ATR ratio when asset volatility spikes.
+   - **Rigorous Circuit Breakers**: Halts trading upon breaching daily loss limits, maximum trades limit, or consecutive losses. Auto-squares off at 3:15 PM IST.
+4. **Execution State Machine & Idempotency**:
+   - **Order Confirmation Loop**: Defers Stop-Loss and Target orders until live entry orders are confirmed as fully filled (complete). Automatically cancels entry if pending > 5 mins.
+   - **Deduplication Tracker**: Saves executed signal keys to a local `logs/placed_signals.json` database to avoid double-placing trades on restarts.
+5. **Interactive Dashboard**:
+   - Real-time card grids for performance statistics.
+   - Interactive candlestick charts with volume histograms and indicators.
+   - Steps manager for broker logins and access token saves.
 
 ---
 
