@@ -4,7 +4,7 @@ A complete, production-grade automated trading application for Indian NSE equiti
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 fib_trader/
@@ -33,7 +33,7 @@ fib_trader/
 
 ---
 
-## ⚡ Key Features
+## Key Features
 
 1. **Dual Trading Mode**:
    - `paper`: Tracks open and closed positions in-memory, updating PnL via simulated ticks.
@@ -54,7 +54,7 @@ fib_trader/
 
 ---
 
-## 🚀 Setup & Installation
+## Setup & Installation
 
 ### 1. Prerequisites
 - Python 3.10 or higher.
@@ -91,7 +91,7 @@ Visit `http://localhost:8501` in your browser.
 
 ---
 
-## 📈 Running the Application
+## Running the Application
 
 ### Live Trading Dashboard
 - Click **Start Live Scanning** to initiate the tick loop (refreshes every 10 seconds).
@@ -107,7 +107,7 @@ Visit `http://localhost:8501` in your browser.
 
 ---
 
-## 🧪 Running Unit Tests
+## Running Unit Tests
 
 Execute the automated test suite using `pytest`:
 ```bash
