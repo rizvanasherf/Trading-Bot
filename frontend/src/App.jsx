@@ -501,14 +501,6 @@ export default function App() {
             <Settings size={18} />
             System Settings
           </button>
-          
-          <button 
-            className={`nav-item ${activeTab === 'auth' ? 'active' : ''}`}
-            onClick={() => setActiveTab('auth')}
-          >
-            <Key size={18} />
-            Angel One Auth
-          </button>
         </nav>
         
         <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1265,7 +1257,8 @@ export default function App() {
 
         {/* TAB 3: Strategy Settings */}
         {activeTab === 'settings' && (
-          <form className="card-panel" onSubmit={saveConfig}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+            <form className="card-panel" onSubmit={saveConfig}>
             <div className="panel-header">
               <h3 className="panel-title">
                 <Settings size={18} style={{ color: '#2979ff' }} />
@@ -1949,109 +1942,107 @@ export default function App() {
                 </div>
               </div>
             </div>
-          </form>
-        )}
-
-        {/* TAB 4: Angel One Auth Session */}
-        {activeTab === 'auth' && (
-          <div className="card-panel">
-            <h3 className="panel-title" style={{ marginBottom: '10px' }}>
-              <Key size={18} style={{ color: '#ff9100' }} />
-              Angel One SmartAPI Session Validation
-            </h3>
-            
-            <p style={{ color: '#8a90a6', fontSize: '14px', marginBottom: '24px', maxWidth: '650px' }}>
-              Configure and test your Angel One developer credentials to establish connection to OpenAPI servers. Once validated, credentials will be persisted to your system `.env` configuration.
-            </p>
-            
-            <form onSubmit={generateAuthToken} style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div className="form-group">
-                <label>SmartAPI API Key</label>
-                <input 
-                  type="password"
-                  className="input-control"
-                  placeholder="Enter Angel API Key"
-                  value={authData.api_key}
-                  onChange={(e) => setAuthData({ ...authData, api_key: e.target.value })}
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Client ID (e.g. AB123456)</label>
-                <input 
-                  type="text"
-                  className="input-control"
-                  placeholder="Enter Angel Client ID"
-                  value={authData.client_id}
-                  onChange={(e) => setAuthData({ ...authData, client_id: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>4-Digit PIN</label>
-                <input 
-                  type="password"
-                  className="input-control"
-                  placeholder="Enter 4-Digit Login PIN"
-                  value={authData.pin}
-                  onChange={(e) => setAuthData({ ...authData, pin: e.target.value })}
-                  maxLength={4}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>TOTP Secret Key</label>
-                <input 
-                  type="password"
-                  className="input-control"
-                  placeholder="Enter TOTP Secret Key (from SmartAPI portal)"
-                  value={authData.totp_secret}
-                  onChange={(e) => setAuthData({ ...authData, totp_secret: e.target.value })}
-                  required
-                />
-              </div>
-              
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
-                Validate & Save Credentials
-              </button>
             </form>
 
-            <div style={{ marginTop: '40px', borderTop: '1px solid #1a2035', paddingTop: '30px' }}>
-              <h4 style={{ color: '#ffffff', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 600 }}>
-                <Activity size={18} style={{ color: '#00e676' }} />
-                Real-Time API Optimization Diagnostics
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Total API Calls</div>
-                  <div style={{ color: '#ffffff', fontSize: '20px', fontWeight: 600 }}>{diagnostics.total_api_calls}</div>
+            <div className="card-panel">
+              <h3 className="panel-title" style={{ marginBottom: '10px' }}>
+                <Key size={18} style={{ color: '#ff9100' }} />
+                Angel One SmartAPI Session Validation
+              </h3>
+              
+              <p style={{ color: '#8a90a6', fontSize: '14px', marginBottom: '24px', maxWidth: '650px' }}>
+                Configure and test your Angel One developer credentials to establish connection to OpenAPI servers. Once validated, credentials will be persisted to your system `.env` configuration.
+              </p>
+              
+              <form onSubmit={generateAuthToken} style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="form-group">
+                  <label>SmartAPI API Key</label>
+                  <input 
+                    type="password"
+                    className="input-control"
+                    placeholder="Enter Angel API Key"
+                    value={authData.api_key}
+                    onChange={(e) => setAuthData({ ...authData, api_key: e.target.value })}
+                    required
+                  />
                 </div>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Cache Hit Ratio</div>
-                  <div style={{ color: '#00e676', fontSize: '20px', fontWeight: 600 }}>{diagnostics.hit_ratio_pct}%</div>
+                
+                <div className="form-group">
+                  <label>Client ID (e.g. AB123456)</label>
+                  <input 
+                    type="text"
+                    className="input-control"
+                    placeholder="Enter Angel Client ID"
+                    value={authData.client_id}
+                    onChange={(e) => setAuthData({ ...authData, client_id: e.target.value })}
+                    required
+                  />
                 </div>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Cache Hits / Misses</div>
-                  <div style={{ color: '#ffffff', fontSize: '16px', fontWeight: 600, marginTop: '4px' }}>
-                    <span style={{ color: '#00e676' }}>{diagnostics.cache_hits}</span> / <span style={{ color: '#ff1744' }}>{diagnostics.cache_misses}</span>
+
+                <div className="form-group">
+                  <label>4-Digit PIN</label>
+                  <input 
+                    type="password"
+                    className="input-control"
+                    placeholder="Enter 4-Digit Login PIN"
+                    value={authData.pin}
+                    onChange={(e) => setAuthData({ ...authData, pin: e.target.value })}
+                    maxLength={4}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>TOTP Secret Key</label>
+                  <input 
+                    type="password"
+                    className="input-control"
+                    placeholder="Enter TOTP Secret Key (from SmartAPI portal)"
+                    value={authData.totp_secret}
+                    onChange={(e) => setAuthData({ ...authData, totp_secret: e.target.value })}
+                    required
+                  />
+                </div>
+                
+                <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
+                  Validate & Save Credentials
+                </button>
+              </form>
+
+              <div style={{ marginTop: '40px', borderTop: '1px solid #1a2035', paddingTop: '30px' }}>
+                <h4 style={{ color: '#ffffff', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: 600 }}>
+                  <Activity size={18} style={{ color: '#00e676' }} />
+                  Real-Time API Optimization Diagnostics
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Total API Calls</div>
+                    <div style={{ color: '#ffffff', fontSize: '20px', fontWeight: 600 }}>{diagnostics.total_api_calls}</div>
                   </div>
-                </div>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Throttled API Calls Saved</div>
-                  <div style={{ color: '#29b6f6', fontSize: '20px', fontWeight: 600 }}>{diagnostics.rate_limit_waits}</div>
-                </div>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Circuit Breaker Trips</div>
-                  <div style={{ color: '#ff9100', fontSize: '20px', fontWeight: 600 }}>{diagnostics.circuit_breaker_trips}</div>
-                </div>
-                <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
-                  <div style={{ color: '#8a90a6', fontSize: '12px' }}>Active Session</div>
-                  <div style={{ color: diagnostics.session_active ? '#00e676' : '#ff1744', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                    <span className={`dot ${diagnostics.session_active ? 'green' : 'red'}`}></span>
-                    {diagnostics.session_active ? "Connected" : "Disconnected"}
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Cache Hit Ratio</div>
+                    <div style={{ color: '#00e676', fontSize: '20px', fontWeight: 600 }}>{diagnostics.hit_ratio_pct}%</div>
+                  </div>
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Cache Hits / Misses</div>
+                    <div style={{ color: '#ffffff', fontSize: '16px', fontWeight: 600, marginTop: '4px' }}>
+                      <span style={{ color: '#00e676' }}>{diagnostics.cache_hits}</span> / <span style={{ color: '#ff1744' }}>{diagnostics.cache_misses}</span>
+                    </div>
+                  </div>
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Throttled API Calls Saved</div>
+                    <div style={{ color: '#29b6f6', fontSize: '20px', fontWeight: 600 }}>{diagnostics.rate_limit_waits}</div>
+                  </div>
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Circuit Breaker Trips</div>
+                    <div style={{ color: '#ff9100', fontSize: '20px', fontWeight: 600 }}>{diagnostics.circuit_breaker_trips}</div>
+                  </div>
+                  <div style={{ background: '#121824', padding: '15px', borderRadius: '6px', border: '1px solid #1a2035' }}>
+                    <div style={{ color: '#8a90a6', fontSize: '12px' }}>Active Session</div>
+                    <div style={{ color: diagnostics.session_active ? '#00e676' : '#ff1744', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                      <span className={`dot ${diagnostics.session_active ? 'green' : 'red'}`}></span>
+                      {diagnostics.session_active ? "Connected" : "Disconnected"}
+                    </div>
                   </div>
                 </div>
               </div>
