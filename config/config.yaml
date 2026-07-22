@@ -32,6 +32,7 @@ strategy:
   lookback_candles: 150
   min_trend_strength: 2.5
   price_tolerance: 0.0025
+  secondary_strategy_type: orb
   strategy_type: cpr_intraday
   swing_threshold: 4
   symbols:
@@ -43,6 +44,9 @@ strategy:
   - SBIN
   - BAJFINANCE
   - AXISBANK
+  - WIPRO
+  - MARUTI
+  - ASIANPAINT
   timeframe: 5minute
   use_vwap: true
   volume_multiplier: 1.3

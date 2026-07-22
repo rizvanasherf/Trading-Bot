@@ -1298,7 +1298,25 @@ export default function App() {
                     <option value="cpr_intraday">CPR Intraday Strategy</option>
                   </select>
                 </div>
-                
+
+                {config.strategy.strategy_type === 'cpr_intraday' && (
+                  <div className="form-group">
+                    <label>Secondary Stock Strategy</label>
+                    <select 
+                      className="input-control"
+                      value={config.strategy.secondary_strategy_type || "none"}
+                      onChange={(e) => setConfig({
+                        ...config,
+                        strategy: { ...config.strategy, secondary_strategy_type: e.target.value }
+                      })}
+                    >
+                      <option value="none">None (Bypass Stock watchlist)</option>
+                      <option value="fibonacci">VWAP + Fibonacci Pullback</option>
+                      <option value="orb">Opening Range Breakout (ORB)</option>
+                      <option value="vwap_pullback">VWAP Pullback - Stocks</option>
+                    </select>
+                  </div>
+                )}
                 {(!config.strategy.strategy_type || config.strategy.strategy_type === 'fibonacci') && (
                   <>
                     <div className="form-group">

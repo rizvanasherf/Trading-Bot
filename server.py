@@ -52,6 +52,7 @@ CONFIG_PATH = Path("config/config.yaml")
 global_config = {}
 data_fetcher: Optional[KiteDataFetcher] = None
 strategy: Optional[FibonacciStrategy] = None
+secondary_strategy: Optional[FibonacciStrategy] = None
 risk_manager: Optional[RiskManager] = None
 order_executor: Optional[OrderExecutor] = None
 
@@ -70,7 +71,7 @@ def save_yaml_config(cfg: dict) -> None:
         yaml.safe_dump(cfg, f, default_flow_style=False)
 
 def init_trading_components():
-    global global_config, data_fetcher, strategy, risk_manager, order_executor
+    global global_config, data_fetcher, strategy, secondary_strategy, risk_manager, order_executor
     
     # Reload settings singleton to fetch any updated .env variables
     new_settings = settings.__class__()
@@ -86,6 +87,8 @@ def init_trading_components():
     data_fetcher = KiteDataFetcher()
     strat_cfg = global_config.get("strategy", {})
     strategy_type = strat_cfg.get("strategy_type", "fibonacci")
+    secondary_strategy_type = strat_cfg.get("secondary_strategy_type", "none")
+    
     if strategy_type == "orb":
         strategy = ORBStrategy(global_config)
     elif strategy_type == "vwap_pullback":
@@ -95,6 +98,18 @@ def init_trading_components():
         strategy = CPRIntradayStrategy(global_config)
     else:
         strategy = FibonacciStrategy(global_config)
+        
+    if strategy_type == "cpr_intraday" and secondary_strategy_type != "none":
+        if secondary_strategy_type == "orb":
+            secondary_strategy = ORBStrategy(global_config)
+        elif secondary_strategy_type == "vwap_pullback":
+            secondary_strategy = VWAPPullbackStrategy(global_config)
+        elif secondary_strategy_type == "fibonacci":
+            secondary_strategy = FibonacciStrategy(global_config)
+        else:
+            secondary_strategy = None
+    else:
+        secondary_strategy = None
     
     capital_val = (
         data_fetcher.get_account_balance().get("available", 100_000)
@@ -135,29 +150,40 @@ def run_scanning_loop():
                 
             # 3. Fetch configurations
             strategy_type = global_config["strategy"].get("strategy_type", "fibonacci")
-            if strategy_type == "cpr_intraday":
-                symbols = ["NIFTY"]
-                timeframe = "5minute"  # CPR options strategy uses 5m timeframe
-            else:
-                symbols = global_config["strategy"]["symbols"]
-                timeframe = global_config["strategy"]["timeframe"]
+            secondary_strategy_type = global_config["strategy"].get("secondary_strategy_type", "none")
             
-            # Fetch data concurrently for all symbols
-            def fetch_symbol_data(sym):
+            scan_tasks = []
+            if strategy_type == "cpr_intraday":
+                scan_tasks.append(("NIFTY", "5minute", strategy))
+                if secondary_strategy_type != "none" and secondary_strategy is not None:
+                    stock_symbols = global_config["strategy"].get("symbols", [])
+                    stock_timeframe = global_config["strategy"].get("timeframe", "15minute")
+                    for sym in stock_symbols:
+                        if sym != "NIFTY":
+                            scan_tasks.append((sym, stock_timeframe, secondary_strategy))
+            else:
+                stock_symbols = global_config["strategy"].get("symbols", [])
+                stock_timeframe = global_config["strategy"].get("timeframe", "15minute")
+                for sym in stock_symbols:
+                    scan_tasks.append((sym, stock_timeframe, strategy))
+            
+            # Fetch data concurrently for all scan tasks
+            def fetch_task_data(task):
+                sym, tf, strat_inst = task
                 try:
                     ltp = data_fetcher.get_ltp(sym)
-                    df_hist = data_fetcher.get_historical_data(sym, interval=timeframe, days=5)
-                    return sym, ltp, df_hist
+                    df_hist = data_fetcher.get_historical_data(sym, interval=tf, days=5)
+                    return sym, ltp, df_hist, strat_inst
                 except Exception as e:
                     logger.error(f"Error fetching data for concurrent scan on {sym}: {e}")
-                    return sym, None, None
+                    return sym, None, None, None
 
-            with ThreadPoolExecutor(max_workers=min(len(symbols), 15)) as executor:
-                fetch_results = list(executor.map(fetch_symbol_data, symbols))
+            with ThreadPoolExecutor(max_workers=min(len(scan_tasks), 15)) as executor:
+                fetch_results = list(executor.map(fetch_task_data, scan_tasks))
 
             ltps = {}
-            for sym, ltp, df_hist in fetch_results:
-                if ltp is None or df_hist is None or df_hist.empty:
+            for sym, ltp, df_hist, strat_inst in fetch_results:
+                if ltp is None or df_hist is None or df_hist.empty or strat_inst is None:
                     continue
                 ltps[sym] = ltp
                 
@@ -168,7 +194,7 @@ def run_scanning_loop():
                         continue
                         
                     # Evaluate strategy signals
-                    signals = strategy.generate_signals(sym, df_hist)
+                    signals = strat_inst.generate_signals(sym, df_hist)
                     if signals:
                         sig = signals[0]
                         open_syms = [p.symbol for p in order_executor.open_positions]
@@ -177,7 +203,7 @@ def run_scanning_loop():
                             # Volatility-adjusted sizing
                             atr_val = None
                             try:
-                                atr_series = strategy._atr(df_hist)
+                                atr_series = strat_inst._atr(df_hist)
                                 if not atr_series.empty:
                                     atr_val = float(atr_series.iloc[-1])
                             except Exception as ex:
@@ -203,7 +229,7 @@ def run_scanning_loop():
                 nifty_res = next((res for res in fetch_results if res[0] == "NIFTY"), None)
                 if nifty_res and nifty_res[2] is not None and not nifty_res[2].empty:
                     try:
-                        sym, ltp, df = nifty_res
+                        sym, ltp, df, _ = nifty_res
                         cpr_vals = strategy.calculate_cpr("NIFTY")
                         if cpr_vals:
                             pivot, tc, bc = cpr_vals
@@ -275,6 +301,10 @@ def get_status():
     global scanning_active, latest_cpr_data
     angel_connected = optimized_client.session.is_connected()
     api_status = "Connected" if angel_connected else "Disconnected"
+    
+    strategy_type = global_config.get("strategy", {}).get("strategy_type", "fibonacci")
+    secondary_strategy_type = global_config.get("strategy", {}).get("secondary_strategy_type", "none")
+    
     return {
         "scanning_active": scanning_active,
         "is_live": settings.is_live,
@@ -282,7 +312,9 @@ def get_status():
         "api_connected": angel_connected,
         "api_status": api_status,
         "last_checked": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
-        "cpr_data": latest_cpr_data
+        "cpr_data": latest_cpr_data,
+        "strategy_type": strategy_type,
+        "secondary_strategy_type": secondary_strategy_type
     }
 
 @app.get("/api/diagnostics")
@@ -557,7 +589,20 @@ def get_logs(lines: int = 40):
 @app.get("/api/chart/{symbol}")
 def get_chart_data(symbol: str):
     try:
+        strategy_type = global_config.get("strategy", {}).get("strategy_type", "fibonacci")
+        secondary_strategy_type = global_config.get("strategy", {}).get("secondary_strategy_type", "none")
+        
+        active_strat_type = strategy_type
+        active_strategy = strategy
+        
+        if strategy_type == "cpr_intraday" and symbol != "NIFTY" and secondary_strategy_type != "none":
+            active_strat_type = secondary_strategy_type
+            active_strategy = secondary_strategy
+            
         timeframe = global_config["strategy"].get("timeframe", "15minute")
+        if active_strat_type == "cpr_intraday":
+            timeframe = "5minute"  # CPR options strategy uses 5m timeframe
+            
         df_chart = data_fetcher.get_historical_data(symbol, interval=timeframe, days=5)
         
         if df_chart.empty:
@@ -572,30 +617,28 @@ def get_chart_data(symbol: str):
         fib_levels = {}
         fib_extensions = {}
         
-        strategy_type = global_config.get("strategy", {}).get("strategy_type", "fibonacci")
-        
         sh_idx_val = None
         sl_idx_val = None
         
-        if strategy_type == "fibonacci":
-            sh_res = strategy.find_swing_high(df_chart["high"])
-            sl_res = strategy.find_swing_low(df_chart["low"])
+        if active_strat_type == "fibonacci" and active_strategy is not None:
+            sh_res = active_strategy.find_swing_high(df_chart["high"])
+            sl_res = active_strategy.find_swing_low(df_chart["low"])
             
             if sh_res and sl_res:
                 sh_idx, sh_val = sh_res
                 sl_idx, sl_val = sl_res
                 direction = "LONG" if sl_idx < sh_idx else "SHORT"
-                fib = strategy.calculate_fib_levels(sh_val, sl_val, Direction.LONG if direction == "LONG" else Direction.SHORT)
+                fib = active_strategy.calculate_fib_levels(sh_val, sl_val, Direction.LONG if direction == "LONG" else Direction.SHORT)
                 fib_levels = {str(k): float(v) for k, v in fib.levels.items()}
                 fib_extensions = {str(k): float(v) for k, v in fib.extensions.items()}
                 sh_idx_val = sh_idx
                 sl_idx_val = sl_idx
                 
-        elif strategy_type == "orb":
+        elif active_strat_type == "orb" and active_strategy is not None:
             # Calculate ORH/ORL for the most recent day in historical df_chart
             last_day = df_chart.index[-1].date()
             df_day = df_chart[df_chart.index.date == last_day]
-            orh, orl = strategy.calculate_opening_range(df_day)
+            orh, orl = active_strategy.calculate_opening_range(df_day)
             
             if orh is not None and orl is not None:
                 # Expose ORH/ORL as fib_levels with string keys to trigger horizontal chart lines in frontend
@@ -608,9 +651,9 @@ def get_chart_data(symbol: str):
                 sh_res = (0, orh)
                 sl_res = (0, orl)
                 
-        elif strategy_type == "vwap_pullback":
-            vwap = strategy._calculate_vwap(df_chart)
-            ema = df_chart["close"].ewm(span=strategy.ema_period, adjust=False).mean()
+        elif active_strat_type == "vwap_pullback" and active_strategy is not None:
+            vwap = active_strategy._calculate_vwap(df_chart)
+            ema = df_chart["close"].ewm(span=active_strategy.ema_period, adjust=False).mean()
             
             curr_vwap = float(vwap.iloc[-1])
             curr_ema = float(ema.iloc[-1])
@@ -624,15 +667,15 @@ def get_chart_data(symbol: str):
             orh = curr_vwap
             orl = curr_ema
             
-        elif strategy_type == "cpr_intraday":
-            vwap = strategy._calculate_vwap(df_chart)
-            ema = df_chart["close"].ewm(span=strategy.ema_period, adjust=False).mean()
+        elif active_strat_type == "cpr_intraday" and active_strategy is not None:
+            vwap = active_strategy._calculate_vwap(df_chart)
+            ema = df_chart["close"].ewm(span=active_strategy.ema_period, adjust=False).mean()
             
             curr_vwap = float(vwap.iloc[-1])
             curr_ema = float(ema.iloc[-1])
             
             # Retrieve daily CPR levels
-            cpr_vals = strategy.calculate_cpr(symbol)
+            cpr_vals = active_strategy.calculate_cpr(symbol)
             if cpr_vals:
                 pivot, tc, bc = cpr_vals
                 fib_levels = {
@@ -668,11 +711,11 @@ def get_chart_data(symbol: str):
             "symbol": symbol,
             "candles": candles,
             "direction": direction,
-            "swing_high": float(sh_res[1]) if sh_res and strategy_type == "fibonacci" else (orh if strategy_type == "orb" and orh else None),
-            "swing_low": float(sl_res[1]) if sl_res and strategy_type == "fibonacci" else (orl if strategy_type == "orb" and orl else None),
+            "swing_high": float(sh_res[1]) if sh_res and active_strat_type == "fibonacci" else (orh if active_strat_type == "orb" and orh else None),
+            "swing_low": float(sl_res[1]) if sl_res and active_strat_type == "fibonacci" else (orl if active_strat_type == "orb" and orl else None),
             "fib_levels": fib_levels,
             "fib_extensions": fib_extensions,
-            "strategy_type": strategy_type
+            "strategy_type": active_strat_type
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

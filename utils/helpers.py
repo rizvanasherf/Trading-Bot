@@ -67,10 +67,6 @@ def fmt_pct(value: float, decimals: int = 2) -> str:
     return f"{value * 100:.{decimals}f}%"
 
 
-def pnl_color(value: float) -> str:
-    """Returns 'green' or 'red' string for Streamlit metric delta."""
-    return "normal" if value >= 0 else "inverse"
-
 
 class IdempotencyTracker:
     def __init__(self, filepath: str = "logs/placed_signals.json"):

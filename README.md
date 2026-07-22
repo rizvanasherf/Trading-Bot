@@ -8,7 +8,8 @@ A complete, production-grade automated trading application for Indian NSE equiti
 
 ```
 fib_trader/
-├── app.py                     # Streamlit dashboard (Live Trading, Backtest, Config, Auth)
+├── server.py                  # FastAPI backend server (scanner daemon & APIs)
+├── frontend/                  # React + Vite web dashboard application
 ├── config/
 │   ├── settings.py            # Pydantic-settings environment variables loader
 │   └── config.yaml            # Strategy & risk management parameter settings
@@ -82,28 +83,35 @@ TELEGRAM_CHAT_ID=your_chat_id
 TRADING_MODE=paper
 ```
 
-### 4. Running the Dashboard
-Start the Streamlit application:
+### 4. Running the Application
+
+First, start the FastAPI backend server daemon:
 ```bash
-streamlit run app.py
+python server.py
 ```
-Visit `http://localhost:8501` in your browser.
+The API server will run at `http://localhost:8000`.
+
+Next, start the React + Vite frontend application:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Visit `http://localhost:5173` in your browser to access the dashboard.
 
 ---
 
-## Running the Application
+## Dashboard Features
 
 ### Live Trading Dashboard
-- Click **Start Live Scanning** to initiate the tick loop (refreshes every 10 seconds).
-- The system checks for entry signals across the symbol list.
-- If a signal matches, it calculates the position size, places the trade, and emits Telegram notifications.
-- View real-time position values and PnL, with emergency manual square-off actions.
+- Monitor real-time tick loops, signals, and account summaries.
+- The system automatically triggers entry signals across your watchlists (Nifty options and stocks).
+- Track real-time position values and PnL, with emergency manual square-off actions.
 
-### Backtesting
-- Navigate to the **Historical Backtesting** tab.
-- Choose a stock symbol, timeframe, and lookback range.
-- Run the backtest to calculate metrics: CAGR, Sharpe Ratio, Win Rate, Profit Factor, and Max Drawdown.
-- Review the equity curve and drawdown charts along with a table of historical trades.
+### Backtesting Simulation
+- Run historical strategy backtests for different stock symbols, timeframes, and lookback ranges.
+- Computes performance metrics: CAGR, Sharpe Ratio, Win Rate, Profit Factor, and Max Drawdown.
+- Displays equity curve and drawdown charts along with historical trades.
 
 ---
 
