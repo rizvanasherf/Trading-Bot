@@ -36,16 +36,16 @@ class CPRIntradayStrategy:
     def warmup_period(self) -> int:
         return max(self.volume_period, self.ema_period, 40)
 
-    def calculate_cpr(self, symbol: str) -> Optional[Tuple[float, float, float]]:
+    def calculate_cpr(self, symbol: str, ref_date: Optional[datetime.date] = None) -> Optional[Tuple[float, float, float]]:
         """Calculate CPR levels (Pivot, TC, BC) from the previous day's OHLC data."""
         try:
-            df_daily = self.data_fetcher.get_historical_data(symbol, interval="day", days=5)
+            df_daily = self.data_fetcher.get_historical_data(symbol, interval="day", days=10)
             if df_daily.empty:
                 return None
             
-            # Find the last completed trading day (excluding today)
-            today_date = now_ist().date()
-            completed_days = df_daily[df_daily.index.date < today_date]
+            # Find the last completed trading day relative to ref_date
+            target_date = ref_date if ref_date is not None else now_ist().date()
+            completed_days = df_daily[df_daily.index.date < target_date]
             
             if completed_days.empty:
                 prev_day = df_daily.iloc[-1]
@@ -84,7 +84,8 @@ class CPRIntradayStrategy:
         if len(df) < self.warmup_period:
             return []
 
-        cpr_vals = self.calculate_cpr(symbol)
+        ref_date = df.index[-1].date()
+        cpr_vals = self.calculate_cpr(symbol, ref_date)
         if not cpr_vals:
             return []
             
@@ -104,7 +105,7 @@ class CPRIntradayStrategy:
         df["vol_ma"] = df["volume"].rolling(window=self.volume_period).mean()
         df["atr"] = self._atr(df, period=self.atr_period)
         
-        today = now_ist().date()
+        today = df.index[-1].date()
         today_df = df[df.index.date == today]
         
         if len(today_df) < 2:
@@ -154,7 +155,7 @@ class CPRIntradayStrategy:
             curr_vwap = df["ema"].iloc[-1]  # Fallback to EMA 20 instead of VWAP
             
         # Check trading window (9:20 AM - 2:45 PM)
-        curr_time = now_ist().time()
+        curr_time = df.index[-1].time()
         start_trade_time = datetime.time(9, 20)
         end_trade_time = datetime.time(14, 45)
         

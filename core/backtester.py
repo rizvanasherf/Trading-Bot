@@ -71,6 +71,9 @@ class Backtester:
             self.strategy = ORBStrategy(config)
         elif strategy_type == "vwap_pullback":
             self.strategy = VWAPPullbackStrategy(config)
+        elif strategy_type == "cpr_intraday":
+            from core.cpr_strategy import CPRIntradayStrategy
+            self.strategy = CPRIntradayStrategy(config)
         else:
             self.strategy = FibonacciStrategy(config)
             
