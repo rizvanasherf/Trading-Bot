@@ -39,7 +39,7 @@ class CPRIntradayStrategy:
     def calculate_cpr(self, symbol: str, ref_date: Optional[datetime.date] = None) -> Optional[Tuple[float, float, float]]:
         """Calculate CPR levels (Pivot, TC, BC) from the previous day's OHLC data."""
         try:
-            df_daily = self.data_fetcher.get_historical_data(symbol, interval="day", days=10)
+            df_daily = self.data_fetcher.get_historical_data_yfinance(symbol, interval="day", days=365)
             if df_daily.empty:
                 return None
             

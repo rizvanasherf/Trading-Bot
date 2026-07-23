@@ -51,6 +51,7 @@ def test_cpr_level_calculations(cpr_config, monkeypatch):
     }, index=dates)
     
     mock_fetcher.get_historical_data.return_value = df_daily
+    mock_fetcher.get_historical_data_yfinance.return_value = df_daily
     
     # Use monkeypatch to assign our mock data fetcher
     strat = CPRIntradayStrategy(cpr_config)
@@ -89,6 +90,9 @@ def test_cpr_strategy_signals_wait(cpr_config, monkeypatch):
     }, index=[now - timedelta(days=1)])
     
     mock_fetcher.get_historical_data.side_effect = lambda sym, interval, days: (
+        df_daily if interval == "day" else df_intraday
+    )
+    mock_fetcher.get_historical_data_yfinance.side_effect = lambda sym, interval, days: (
         df_daily if interval == "day" else df_intraday
     )
     
