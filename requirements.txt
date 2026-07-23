@@ -18,3 +18,4 @@ schedule>=1.2.0
 yfinance
 logzero
 websocket-client
+pyarrow

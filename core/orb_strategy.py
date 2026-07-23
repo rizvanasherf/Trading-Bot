@@ -167,8 +167,8 @@ class ORBStrategy:
 
         # 4. Check for Long Breakout (close crosses above ORH)
         if prev_close <= orh and current_close > orh:
-            # RSI momentum check (55-70 zone for momentum breakouts, capped at 75)
-            if not (55.0 <= rsi_15m <= 70.0):
+            # RSI momentum check (RSI >= 55.0 to ensure strong upward momentum, no upper cap)
+            if rsi_15m < 55.0:
                 return []
                 
             # VWAP Filter
@@ -193,8 +193,8 @@ class ORBStrategy:
 
         # 5. Check for Short Breakout (close crosses below ORL)
         if prev_close >= orl and current_close < orl:
-            # RSI momentum check (30-45 zone, blocked below 25)
-            if not (30.0 <= rsi_15m <= 45.0):
+            # RSI momentum check (RSI <= 45.0 to ensure strong downward momentum, no lower cap)
+            if rsi_15m > 45.0:
                 return []
                 
             # VWAP Filter
