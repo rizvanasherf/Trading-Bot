@@ -90,8 +90,8 @@ class KiteDataFetcher:
             )
 
         df = optimized_client.get_historical(symbol, interval, days)
-        if df.empty and symbol.upper() in ("NIFTY", "NIFTY 50", "NIFTY_50", "BANKNIFTY", "BANK NIFTY"):
-            logger.warning(f"[Data Fetcher] NIFTY historical data from Angel One is empty/failed. Falling back to Yahoo Finance.")
+        if df.empty:
+            logger.warning(f"[Data Fetcher] Historical data from Angel One is empty/failed for {symbol}. Falling back to Yahoo Finance.")
             df = self.get_historical_data_yfinance(symbol, interval, days)
         return df
 
