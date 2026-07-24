@@ -109,7 +109,24 @@ class BatchQuoteFetcher:
                     self._fallback_individual(missing_symbols, results)
         else:
             # Fallback to mock mode/individual if connector is offline
-            self._fallback_individual(missing_symbols, results)
+            from config.settings import settings
+            if not settings.angel_configured:
+                # Offline mock mode: populate with mock quotes to keep the dashboard working
+                from core.data_fetcher import MOCK_BASE_PRICES
+                import random
+                for symbol in missing_symbols:
+                    base = MOCK_BASE_PRICES.get(symbol.upper(), 1000.0)
+                    quote_data = {
+                        "last_price": round(base * random.uniform(0.995, 1.005), 2),
+                        "ohlc": {
+                            "open": base, "high": base, "low": base, "close": base
+                        },
+                        "volume": 0,
+                        "average_price": base
+                    }
+                    results[symbol] = quote_data
+            else:
+                self._fallback_individual(missing_symbols, results)
 
         return results
 
@@ -127,6 +144,9 @@ class BatchQuoteFetcher:
 
     def _fallback_individual(self, symbols: List[str], results: Dict[str, dict]) -> None:
         """Fallback to request quote one-by-one with rate limits."""
+        if not connector.smart:
+            logger.warning("[Quote Fetcher] SmartConnect is not initialized. Skipping individual fallback quotes.")
+            return
         for symbol in symbols:
             token, trading_sym = connector.get_token_info(symbol)
             if not token:

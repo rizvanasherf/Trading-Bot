@@ -31,6 +31,7 @@ class CPRIntradayStrategy:
         
         from core.data_fetcher import KiteDataFetcher
         self.data_fetcher = KiteDataFetcher()
+        self._cpr_cache = {}  # Cache lookup to prevent redundant daily downloads: (symbol, ref_date) -> (pivot, tc, bc)
 
     @property
     def warmup_period(self) -> int:
@@ -39,12 +40,16 @@ class CPRIntradayStrategy:
     def calculate_cpr(self, symbol: str, ref_date: Optional[datetime.date] = None) -> Optional[Tuple[float, float, float]]:
         """Calculate CPR levels (Pivot, TC, BC) from the previous day's OHLC data."""
         try:
+            target_date = ref_date if ref_date is not None else now_ist().date()
+            cache_key = (symbol.upper(), target_date)
+            if cache_key in self._cpr_cache:
+                return self._cpr_cache[cache_key]
+
             df_daily = self.data_fetcher.get_historical_data_yfinance(symbol, interval="day", days=365)
             if df_daily.empty:
                 return None
             
             # Find the last completed trading day relative to ref_date
-            target_date = ref_date if ref_date is not None else now_ist().date()
             completed_days = df_daily[df_daily.index.date < target_date]
             
             if completed_days.empty:
@@ -60,7 +65,9 @@ class CPRIntradayStrategy:
             bc = (high + low) / 2
             tc = (pivot - bc) + pivot
             
-            return pivot, tc, bc
+            res = (pivot, tc, bc)
+            self._cpr_cache[cache_key] = res
+            return res
         except Exception as e:
             logger.error(f"[CPR Strategy] Error calculating CPR for {symbol}: {e}")
             return None

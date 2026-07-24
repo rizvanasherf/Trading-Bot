@@ -81,7 +81,8 @@ class KiteDataFetcher:
         days: int = 30,
     ) -> pd.DataFrame:
         """Return OHLCV DataFrame indexed by datetime (IST) using OptimizedAngelClient."""
-        if self.is_mock:
+        # Only return mock generated candles if credentials are not configured at all
+        if self.is_mock and not settings.angel_configured:
             n_candles = min(days * 26, 500)
             return _generate_mock_ohlcv(
                 symbol,
@@ -97,11 +98,25 @@ class KiteDataFetcher:
 
     def get_ltp(self, symbol: str) -> float:
         """Last traded price from OptimizedAngelClient."""
-        if self.is_mock:
+        # Only return mock base price if credentials are not configured at all
+        if self.is_mock and not settings.angel_configured:
             base = MOCK_BASE_PRICES.get(symbol.upper(), 1000.0)
             return round(base * random.uniform(0.995, 1.005), 2)
 
-        return optimized_client.get_ltp(symbol)
+        try:
+            val = optimized_client.get_ltp(symbol)
+            if val > 0:
+                return val
+            raise ValueError("Invalid LTP returned")
+        except Exception as e:
+            logger.warning(f"[Data Fetcher] Failed to get LTP from Angel One for {symbol}: {e}. Falling back to Yahoo Finance.")
+            # Fetch latest 5-minute close as LTP fallback
+            df = self.get_historical_data_yfinance(symbol, interval="5minute", days=1)
+            if not df.empty:
+                return float(df["close"].iloc[-1])
+            # If both fail, return a signal value 0.0 or raise to prevent fake exit triggers
+            logger.error(f"[Data Fetcher] Completely failed to get real LTP for {symbol} (Angel One & Yahoo Finance offline).")
+            raise ConnectionError(f"Could not retrieve real market price for {symbol}")
 
     def get_quote(self, symbol: str) -> dict:
         """Full market quote from OptimizedAngelClient."""
