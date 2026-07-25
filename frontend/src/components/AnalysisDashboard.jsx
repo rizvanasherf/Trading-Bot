@@ -180,6 +180,16 @@ export default function AnalysisDashboard({ apiBase }) {
     return { month: item.month, cumulative: runningSum };
   });
 
+  // SVG dimensions
+  const width = 500;
+  const height = 300;
+  const paddingLeft = 55;
+  const paddingRight = 20;
+  const paddingTop = 30;
+  const paddingBottom = 40;
+  const plotWidth = width - paddingLeft - paddingRight;
+  const plotHeight = height - paddingTop - paddingBottom;
+
   const totalCumulativeProfit = runningSum;
 
   // Equity Curve calculations for v2.5
@@ -267,15 +277,6 @@ export default function AnalysisDashboard({ apiBase }) {
     return isNegative ? `-${formatted}` : formatted;
   };
 
-  // SVG dimensions
-  const width = 500;
-  const height = 300;
-  const paddingLeft = 55;
-  const paddingRight = 20;
-  const paddingTop = 30;
-  const paddingBottom = 40;
-  const plotWidth = width - paddingLeft - paddingRight;
-  const plotHeight = height - paddingTop - paddingBottom;
 
   // ── DYNAMIC BAR CHART CALCULATIONS (Supports negative and positive values) ──
   const maxAbsMonthly = Math.max(...monthlyTotals.map(d => Math.abs(d.profit)), 1000);
