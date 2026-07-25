@@ -300,7 +300,10 @@ class AngelAuthModel(BaseModel):
 def get_status():
     global scanning_active, latest_cpr_data
     angel_connected = optimized_client.session.is_connected()
-    api_status = "Connected" if angel_connected else "Disconnected"
+    if not settings.angel_configured:
+        api_status = "Mock Mode"
+    else:
+        api_status = "Connected" if angel_connected else "Disconnected"
     
     strategy_type = global_config.get("strategy", {}).get("strategy_type", "fibonacci")
     secondary_strategy_type = global_config.get("strategy", {}).get("secondary_strategy_type", "none")
@@ -497,6 +500,20 @@ def clear_trades():
     except Exception as e:
         logger.error(f"Failed to clear trades: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/trades/download")
+def download_trades():
+    from fastapi.responses import FileResponse
+    trade_history_file = Path("logs/trade_history.csv")
+    if not trade_history_file.exists():
+        trade_history_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(trade_history_file, "w", encoding="utf-8") as f:
+            f.write("timestamp,id,symbol,direction,qty,entry_price,exit_price,pnl,exit_reason,entry_time\n")
+    return FileResponse(
+        path=trade_history_file,
+        filename="trade_history.csv",
+        media_type="text/csv"
+    )
 
 @app.get("/api/trades")
 def get_trades(period: str = "Today's Trades"):

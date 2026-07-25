@@ -61,6 +61,10 @@ export default function App() {
   const [positions, setPositions] = useState([]);
   const [trades, setTrades] = useState([]);
   const [selectedPeriod, setSelectedPeriod] = useState("Today's Trades");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterDirection, setFilterDirection] = useState("ALL");
+  const [filterReason, setFilterReason] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Config Form state
   const [config, setConfig] = useState({
@@ -460,6 +464,25 @@ export default function App() {
     }
   };
 
+  // Filter and Paginate Completed Trades (V2 feature)
+  const filteredTrades = trades.filter(t => {
+    const matchesSearch = t.symbol.toUpperCase().includes(searchQuery.toUpperCase());
+    const matchesDirection = filterDirection === "ALL" || t.direction === filterDirection;
+    const matchesReason = filterReason === "ALL" || t.exit_reason === filterReason;
+    return matchesSearch && matchesDirection && matchesReason;
+  });
+
+  const tradesPerPage = 10;
+  const totalPages = Math.ceil(filteredTrades.length / tradesPerPage);
+  const paginatedTrades = filteredTrades.slice(
+    (currentPage - 1) * tradesPerPage,
+    currentPage * tradesPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterDirection, filterReason, selectedPeriod]);
+
   return (
     <div className="app-container">
       {/* Sidebar Navigation */}
@@ -492,6 +515,14 @@ export default function App() {
           >
             <PieChart size={18} />
             Data Analysis
+          </button>
+
+          <button 
+            className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            <Clock size={18} />
+            Trade History
           </button>
           
           <button 
@@ -839,92 +870,6 @@ export default function App() {
                               Exit
                             </button>
                           </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Completed Trades Log */}
-            <div className="card-panel">
-              <div className="panel-header">
-                <h3 className="panel-title">
-                  <FileText size={18} style={{ color: '#ffd54f' }} />
-                  Completed Trades History
-                </h3>
-                
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <select 
-                    className="input-control"
-                    value={selectedPeriod}
-                    onChange={(e) => {
-                      setSelectedPeriod(e.target.value);
-                      setTimeout(fetchTrades, 50);
-                    }}
-                    style={{ padding: '6px 12px', minWidth: '180px' }}
-                  >
-                    <option>Today's Trades</option>
-                    <option>Yesterday's Trades</option>
-                    <option>This Month's Trades</option>
-                    <option>Last Month's Trades</option>
-                    <option>Last 7 Days</option>
-                    <option>All Historical Trades</option>
-                  </select>
-                  <button 
-                    className="btn"
-                    onClick={clearTrades}
-                    style={{ 
-                      padding: '6px 12px', 
-                      fontSize: '12px', 
-                      background: 'rgba(255, 23, 68, 0.12)', 
-                      color: '#ff1744', 
-                      border: '1px solid rgba(255, 23, 68, 0.25)',
-                      fontWeight: 600
-                    }}
-                  >
-                    Clear History
-                  </button>
-                </div>
-              </div>
-              
-              {trades.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: '#8a90a6', fontStyle: 'italic' }}>
-                  No completed trades recorded for {selectedPeriod}.
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table className="custom-table">
-                    <thead>
-                      <tr>
-                        <th>Timestamp</th>
-                        <th>Symbol</th>
-                        <th>Direction</th>
-                        <th>Quantity</th>
-                        <th>Entry Price</th>
-                        <th>Exit Price</th>
-                        <th>Realised P&L</th>
-                        <th>Exit Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trades.map((t, idx) => (
-                        <tr key={idx}>
-                          <td style={{ color: '#8a90a6' }}>{t.timestamp}</td>
-                          <td style={{ fontWeight: 700 }}>{t.symbol}</td>
-                          <td>
-                            <span className={`badge ${t.direction === 'LONG' ? 'badge-green' : 'badge-red'}`}>
-                              {t.direction}
-                            </span>
-                          </td>
-                          <td>{t.qty}</td>
-                          <td>₹{t.entry_price.toFixed(2)}</td>
-                          <td>₹{t.exit_price.toFixed(2)}</td>
-                          <td style={{ fontWeight: 700, color: t.pnl >= 0 ? '#00e676' : '#ff1744' }}>
-                            ₹{t.pnl.toFixed(2)}
-                          </td>
-                          <td style={{ color: '#8a90a6' }}>{t.exit_reason}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -2047,6 +1992,188 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB: Trade History */}
+        {activeTab === 'history' && (
+          <div className="card-panel">
+            <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '15px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Clock size={22} style={{ color: '#ffd54f' }} />
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#ffffff' }}>Completed Trades History</h2>
+                  <p style={{ fontSize: '12px', color: '#8a90a6', margin: '2px 0 0 0' }}>Review and export your historic trading bot actions.</p>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select 
+                  className="input-control"
+                  value={selectedPeriod}
+                  onChange={(e) => {
+                    setSelectedPeriod(e.target.value);
+                    setTimeout(fetchTrades, 50);
+                  }}
+                  style={{ padding: '6px 12px', minWidth: '180px' }}
+                >
+                  <option>Today's Trades</option>
+                  <option>Yesterday's Trades</option>
+                  <option>This Month's Trades</option>
+                  <option>Last Month's Trades</option>
+                  <option>Last 7 Days</option>
+                  <option>All Historical Trades</option>
+                </select>
+
+                <a 
+                  href={`${API_BASE}/trades/download`}
+                  download="trade_history.csv"
+                  className="btn"
+                  style={{ 
+                    padding: '8px 16px', 
+                    fontSize: '12px', 
+                    background: 'rgba(0, 230, 118, 0.12)', 
+                    color: '#00e676', 
+                    border: '1px solid rgba(0, 230, 118, 0.25)',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <FileText size={14} />
+                  Download CSV
+                </a>
+
+                <button 
+                  className="btn"
+                  onClick={clearTrades}
+                  style={{ 
+                    padding: '8px 16px', 
+                    fontSize: '12px', 
+                    background: 'rgba(255, 23, 68, 0.12)', 
+                    color: '#ff1744', 
+                    border: '1px solid rgba(255, 23, 68, 0.25)',
+                    fontWeight: 600
+                  }}
+                >
+                  Clear History
+                </button>
+              </div>
+            </div>
+
+            {/* Filter controls */}
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8a90a6', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Search Symbol</label>
+                <input 
+                  type="text" 
+                  className="input-control" 
+                  placeholder="e.g. RELIANCE, NIFTY" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: '100%', background: '#0d111a', border: '1px solid #1a2035' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8a90a6', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Direction</label>
+                <select 
+                  className="input-control" 
+                  value={filterDirection}
+                  onChange={(e) => setFilterDirection(e.target.value)}
+                  style={{ minWidth: '120px', background: '#0d111a', border: '1px solid #1a2035' }}
+                >
+                  <option value="ALL">All</option>
+                  <option value="LONG">Long</option>
+                  <option value="SHORT">Short</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8a90a6', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Exit Reason</label>
+                <select 
+                  className="input-control" 
+                  value={filterReason}
+                  onChange={(e) => setFilterReason(e.target.value)}
+                  style={{ minWidth: '150px', background: '#0d111a', border: '1px solid #1a2035' }}
+                >
+                  <option value="ALL">All Reasons</option>
+                  <option value="CLOSED_SL">Stop Loss (SL)</option>
+                  <option value="CLOSED_TARGET">Target</option>
+                  <option value="CLOSED_SQUAREOFF">Auto-Squareoff</option>
+                </select>
+              </div>
+            </div>
+            
+            {filteredTrades.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '50px 0', color: '#8a90a6', fontStyle: 'italic' }}>
+                No completed trades found matching your filters for {selectedPeriod}.
+              </div>
+            ) : (
+              <>
+                <div className="table-container">
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Symbol</th>
+                        <th>Direction</th>
+                        <th>Quantity</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>Realised P&L</th>
+                        <th>Exit Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedTrades.map((t, idx) => (
+                        <tr key={idx}>
+                          <td style={{ color: '#8a90a6' }}>{t.timestamp}</td>
+                          <td style={{ fontWeight: 700, color: '#ffffff' }}>{t.symbol}</td>
+                          <td>
+                            <span className={`badge ${t.direction === 'LONG' ? 'badge-green' : 'badge-red'}`}>
+                              {t.direction}
+                            </span>
+                          </td>
+                          <td style={{ color: '#ffffff' }}>{t.qty}</td>
+                          <td style={{ color: '#ffffff' }}>₹{t.entry_price.toFixed(2)}</td>
+                          <td style={{ color: '#ffffff' }}>₹{t.exit_price.toFixed(2)}</td>
+                          <td style={{ fontWeight: 700, color: t.pnl >= 0 ? '#00e676' : '#ff1744' }}>
+                            ₹{t.pnl.toFixed(2)}
+                          </td>
+                          <td style={{ color: '#8a90a6' }}>{t.exit_reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
+                    <button 
+                      className="btn" 
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      style={{ padding: '6px 12px', opacity: currentPage === 1 ? 0.5 : 1 }}
+                    >
+                      Previous
+                    </button>
+                    <span style={{ fontSize: '13px', color: '#8a90a6' }}>
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <button 
+                      className="btn" 
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      style={{ padding: '6px 12px', opacity: currentPage === totalPages ? 0.5 : 1 }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

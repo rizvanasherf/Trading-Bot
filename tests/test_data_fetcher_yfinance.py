@@ -44,7 +44,7 @@ def test_yfinance_dataframe_cleaning(data_fetcher):
         }, index=[pd.Timestamp("2026-07-14 09:15:00"), pd.Timestamp("2026-07-14 09:20:00")])
         mock_download.return_value = raw_df
         
-        df_clean = data_fetcher.get_historical_data_yfinance("TCS", interval="5minute", days=10)
+        df_clean = data_fetcher.get_historical_data_yfinance("TCS", interval="5minute", days=15)
         
         assert not df_clean.empty
         # Columns must be lowercased

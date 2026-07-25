@@ -185,13 +185,13 @@ class OptimizedAngelClient:
     # ── Exception / Stats Monitor ─────────────────────────────────────────────
 
     def _handle_exception(self, e: Exception) -> None:
-        """Intercept session expirations (AB1010) and count circuit breaker trips."""
+        """Intercept session expirations (AB1010, not logged in, invalid token) and auto-reconnect."""
         if isinstance(e, CircuitOpenError):
             self.stats["circuit_breaker_trips"] += 1
         
         # Extract error message for session expired code
         msg = str(e)
-        if "AB1010" in msg:
+        if "AB1010" in msg or "not logged in" in msg.lower() or "invalid token" in msg.lower():
             self.session.verify_or_reconnect("AB1010")
 
     def api_stats(self) -> dict:
