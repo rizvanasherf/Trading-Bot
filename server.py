@@ -515,6 +515,117 @@ def download_trades():
         media_type="text/csv"
     )
 
+@app.get("/api/analytics/performance")
+def get_performance_analytics():
+    import pandas as pd
+    import numpy as np
+    
+    trade_history_file = Path("logs/trade_history.csv")
+    capital = global_config.get("risk", {}).get("capital", 500_000.0)
+    
+    default_res = {
+        "equity_curve": [],
+        "sharpe_ratio": 0.0,
+        "profit_factor": 0.0,
+        "max_drawdown_pct": 0.0,
+        "win_loss_ratio": 0.0,
+        "calendar_map": {},
+        "total_trades": 0,
+        "win_rate_pct": 0.0
+    }
+    
+    if not trade_history_file.exists():
+        return default_res
+        
+    try:
+        df = pd.read_csv(trade_history_file)
+        if df.empty:
+            return default_res
+            
+        # Parse timestamps and sort
+        df['dt'] = pd.to_datetime(df['timestamp'])
+        df = df.sort_values(by='dt').reset_index(drop=True)
+        
+        # 1. Equity Curve
+        equity_curve = []
+        running_equity = float(capital)
+        
+        # Add starting point
+        if not df.empty:
+            first_date = df['dt'].iloc[0] - pd.Timedelta(minutes=5)
+            equity_curve.append({
+                "date": first_date.strftime("%Y-%m-%d %H:%M"),
+                "equity": running_equity
+            })
+            
+        for _, row in df.iterrows():
+            running_equity += float(row['pnl'])
+            equity_curve.append({
+                "date": row['dt'].strftime("%Y-%m-%d %H:%M"),
+                "equity": round(running_equity, 2)
+            })
+            
+        # 2. Daily returns for Sharpe Ratio
+        df['date_only'] = df['dt'].dt.date
+        daily_pnl = df.groupby('date_only')['pnl'].sum().reset_index()
+        daily_pnl['return_pct'] = daily_pnl['pnl'] / float(capital)
+        
+        if len(daily_pnl) > 1:
+            mean_ret = daily_pnl['return_pct'].mean()
+            std_ret = daily_pnl['return_pct'].std()
+            if std_ret > 0:
+                sharpe_ratio = round((mean_ret / std_ret) * np.sqrt(252), 2)
+            else:
+                sharpe_ratio = 0.0
+        else:
+            sharpe_ratio = 0.0
+            
+        # 3. Profit Factor
+        wins = df[df['pnl'] > 0]['pnl'].sum()
+        losses = abs(df[df['pnl'] < 0]['pnl'].sum())
+        profit_factor = round(wins / losses, 2) if losses > 0 else (round(wins, 2) if wins > 0 else 0.0)
+        
+        # 4. Max Drawdown
+        running_equities = [capital]
+        curr = capital
+        for p in df['pnl']:
+            curr += p
+            running_equities.append(curr)
+        running_eq_arr = np.array(running_equities)
+        peaks = np.maximum.accumulate(running_eq_arr)
+        drawdowns = (peaks - running_eq_arr) / peaks
+        max_drawdown_pct = round(float(drawdowns.max()) * 100, 2)
+        
+        # 5. Average Win / Average Loss Ratio
+        win_trades = df[df['pnl'] > 0]['pnl']
+        loss_trades = df[df['pnl'] < 0]['pnl']
+        avg_win = win_trades.mean() if not win_trades.empty else 0.0
+        avg_loss = abs(loss_trades.mean()) if not loss_trades.empty else 0.0
+        win_loss_ratio = round(avg_win / avg_loss, 2) if avg_loss > 0 else (round(avg_win, 2) if avg_win > 0 else 0.0)
+        
+        # 6. Calendar Map
+        calendar_map = {}
+        for _, row in daily_pnl.iterrows():
+            calendar_map[str(row['date_only'])] = round(float(row['pnl']), 2)
+            
+        # 7. Overall trade metrics
+        total_trades = len(df)
+        win_rate_pct = round((len(win_trades) / total_trades) * 100, 2) if total_trades > 0 else 0.0
+        
+        return {
+            "equity_curve": equity_curve,
+            "sharpe_ratio": float(sharpe_ratio),
+            "profit_factor": float(profit_factor),
+            "max_drawdown_pct": float(max_drawdown_pct),
+            "win_loss_ratio": float(win_loss_ratio),
+            "calendar_map": calendar_map,
+            "total_trades": total_trades,
+            "win_rate_pct": win_rate_pct
+        }
+    except Exception as e:
+        logger.error(f"Error calculating performance analytics: {e}")
+        return default_res
+
 @app.get("/api/trades")
 def get_trades(period: str = "Today's Trades"):
     trade_history_file = Path("logs/trade_history.csv")

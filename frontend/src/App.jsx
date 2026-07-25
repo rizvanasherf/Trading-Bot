@@ -214,7 +214,13 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/config`);
       const data = await res.json();
-      setConfig(data);
+      const processedConfig = {
+        ...data,
+        orb: data.orb || { start_time: "09:15", end_time: "09:30", volume_period: 20, volume_multiplier: 1.3, target_multiplier: 1.5, stop_loss_pct: 0.005 },
+        vwap_pullback: data.vwap_pullback || { ema_period: 9, volume_period: 20, volume_multiplier: 1.2, stop_loss_pct: 0.005, lookback_swings: 20 },
+        cpr_intraday: data.cpr_intraday || { ema_period: 20, volume_period: 20, volume_multiplier: 1.3, narrow_cpr_threshold: 0.05, stop_loss_type: "fixed", stop_loss_pct: 0.005 }
+      };
+      setConfig(processedConfig);
       if (data.strategy?.strategy_type === 'cpr_intraday') {
         if (chartSymbol !== 'NIFTY') {
           setChartSymbol('NIFTY');

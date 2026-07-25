@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Info, TrendingUp, DollarSign, Wallet, Shield, Activity, RefreshCw } from 'lucide-react';
+import { Check, Info, TrendingUp, DollarSign, Wallet, Shield, Activity, RefreshCw, Calendar, Percent } from 'lucide-react';
 
 const DEMO_STRATEGIES_DATA = [
   {
@@ -44,6 +44,31 @@ export default function AnalysisDashboard({ apiBase }) {
   const [hoveredBarIndex, setHoveredBarIndex] = useState(null);
   const [hoveredLineIndex, setHoveredLineIndex] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  const [viewMode, setViewMode] = useState('monthly'); // monthly | performance
+  const [performance, setPerformance] = useState({
+    equity_curve: [],
+    sharpe_ratio: 0.0,
+    profit_factor: 0.0,
+    max_drawdown_pct: 0.0,
+    win_loss_ratio: 0.0,
+    calendar_map: {},
+    total_trades: 0,
+    win_rate_pct: 0.0
+  });
+
+  const [hoveredEquityIndex, setHoveredEquityIndex] = useState(null);
+
+  // Fetch performance analytics
+  useEffect(() => {
+    if (!apiBase) return;
+    fetch(`${apiBase}/analytics/performance`)
+      .then(res => res.json())
+      .then(data => {
+        setPerformance(data);
+      })
+      .catch(err => console.error("Error fetching performance analytics:", err));
+  }, [apiBase, refreshTrigger]);
 
   // Fetch actual trades
   useEffect(() => {
@@ -156,6 +181,64 @@ export default function AnalysisDashboard({ apiBase }) {
   });
 
   const totalCumulativeProfit = runningSum;
+
+  // Equity Curve calculations for v2.5
+  const drawEquityCurve = () => {
+    const curve = performance.equity_curve || [];
+    if (curve.length === 0) return null;
+
+    const equities = curve.map(c => c.equity);
+    const minEq = Math.min(...equities);
+    const maxEq = Math.max(...equities);
+    
+    // Give some padding top/bottom
+    const range = (maxEq - minEq) || 1000;
+    const padding = range * 0.1;
+    const yMin = minEq - padding;
+    const yMax = maxEq + padding;
+    const yRange = yMax - yMin;
+
+    const points = curve.map((c, idx) => {
+      const x = paddingLeft + (idx / (curve.length - 1)) * plotWidth;
+      const y = paddingTop + plotHeight - ((c.equity - yMin) / yRange) * plotHeight;
+      return { x, y, date: c.date, val: c.equity };
+    });
+
+    const pathD = points.map((p, idx) => {
+      return `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`;
+    }).join(' ');
+
+    const yTicks = [yMin, yMin + yRange * 0.25, yMin + yRange * 0.5, yMin + yRange * 0.75, yMax];
+
+    return { points, pathD, yTicks, yMin, yMax, yRange };
+  };
+
+  const curveData = drawEquityCurve();
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June", 
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const renderCalendar = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+
+    const days = [];
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push(null);
+    }
+    for (let d = 1; d <= totalDays; d++) {
+      days.push(d);
+    }
+
+    return { days, year, month, monthName: monthNames[month] };
+  };
+
+  const calendarData = renderCalendar();
 
   // Format currency
   const formatINR = (val) => {
@@ -614,340 +697,627 @@ export default function AnalysisDashboard({ apiBase }) {
         </div>
       )}
 
-      {/* Strategies / Symbols Checkboxes Selector */}
-      {activeStrategies.length > 0 && (
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+      {/* View Mode Tabs Selection */}
+      {realTrades.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'rgba(255, 255, 255, 0.02)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)', width: 'fit-content' }}>
           <button 
-            type="button" 
-            className="btn btn-secondary" 
-            style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
-            onClick={() => {
-              const allSelected = {};
-              activeStrategies.forEach(s => { allSelected[s.id] = true; });
-              setSelectedStrats(allSelected);
+            type="button"
+            className="btn"
+            style={{ 
+              padding: '6px 16px', 
+              fontSize: '13px', 
+              background: viewMode === 'monthly' ? '#00d2ff' : 'transparent',
+              color: viewMode === 'monthly' ? '#000000' : '#8a90a6',
+              border: 'none',
+              fontWeight: 600,
+              borderRadius: '6px',
+              cursor: 'pointer'
             }}
+            onClick={() => setViewMode('monthly')}
           >
-            Select All
+            Monthly Breakdowns
           </button>
           <button 
-            type="button" 
-            className="btn btn-secondary" 
-            style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
-            onClick={() => {
-              setSelectedStrats({});
+            type="button"
+            className="btn"
+            style={{ 
+              padding: '6px 16px', 
+              fontSize: '13px', 
+              background: viewMode === 'performance' ? '#00d2ff' : 'transparent',
+              color: viewMode === 'performance' ? '#000000' : '#8a90a6',
+              border: 'none',
+              fontWeight: 600,
+              borderRadius: '6px',
+              cursor: 'pointer'
             }}
+            onClick={() => setViewMode('performance')}
           >
-            Unselect All
+            Performance & Calendar
           </button>
         </div>
       )}
 
-      <div className="strategies-selector">
-        {activeStrategies.map(strat => {
-          const isActive = selectedStrats[strat.id];
-          return (
-            <div 
-              key={strat.id} 
-              className={`strategy-checkbox-card ${isActive ? 'active' : ''}`}
-              onClick={() => toggleStrategy(strat.id)}
-            >
-              <div className="chk-circle">
-                {isActive && <Check size={12} strokeWidth={4} />}
+      {viewMode === 'monthly' && realTrades.length > 0 && (
+        <>
+          {/* Strategies / Symbols Checkboxes Selector */}
+          {activeStrategies.length > 0 && (
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
+                onClick={() => {
+                  const allSelected = {};
+                  activeStrategies.forEach(s => { allSelected[s.id] = true; });
+                  setSelectedStrats(allSelected);
+                }}
+              >
+                Select All
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ padding: '6px 12px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#8a90a6', borderRadius: '6px', cursor: 'pointer' }}
+                onClick={() => {
+                  setSelectedStrats({});
+                }}
+              >
+                Unselect All
+              </button>
+            </div>
+          )}
+
+          <div className="strategies-selector">
+            {activeStrategies.map(strat => {
+              const isActive = selectedStrats[strat.id];
+              return (
+                <div 
+                  key={strat.id} 
+                  className={`strategy-checkbox-card ${isActive ? 'active' : ''}`}
+                  onClick={() => toggleStrategy(strat.id)}
+                >
+                  <div className="chk-circle">
+                    {isActive && <Check size={12} strokeWidth={4} />}
+                  </div>
+                  <div className="strat-details">
+                    <span className="strat-name">{strat.name}</span>
+                    <span className="strat-cap">
+                      {isDemoMode ? 'Capital: ' : 'Exposure: '}{formatINR(strat.capital)}
+                    </span>
+                    <span className="strat-cap" style={{ fontSize: '11px', marginTop: '1px' }}>
+                      Win Rate: {strat.winRate} ({strat.tradesCount} Trades)
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* KPI Metrics */}
+          <div className="kpi-row">
+            <div className="kpi-card">
+              <div className="kpi-icon-box">
+                <Wallet size={20} />
               </div>
-              <div className="strat-details">
-                <span className="strat-name">{strat.name}</span>
-                <span className="strat-cap">
-                  {isDemoMode ? 'Capital: ' : 'Exposure: '}{formatINR(strat.capital)}
-                </span>
-                <span className="strat-cap" style={{ fontSize: '11px', marginTop: '1px' }}>
-                  Win Rate: {strat.winRate} ({strat.tradesCount} Trades)
+              <div className="kpi-text">
+                <span className="kpi-label">{isDemoMode ? 'Total Capital' : 'Total Traded Exposure'}</span>
+                <span className="kpi-val">{formatINR(totalCapital)}</span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon-box cyan">
+                <DollarSign size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Selected Exposure</span>
+                <span className="kpi-val">{formatINR(selectedCapital)}</span>
+              </div>
+            </div>
+
+            <div className="kpi-card">
+              <div className={`kpi-icon-box ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
+                <TrendingUp size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Cumulative Profit / Loss</span>
+                <span className={`kpi-val ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
+                  {totalCumulativeProfit >= 0 ? '+' : ''}{formatINR(totalCumulativeProfit)}
                 </span>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* KPI Metrics */}
-      <div className="kpi-row">
-        <div className="kpi-card">
-          <div className="kpi-icon-box">
-            <Wallet size={20} />
           </div>
-          <div className="kpi-text">
-            <span className="kpi-label">{isDemoMode ? 'Total Capital' : 'Total Traded Exposure'}</span>
-            <span className="kpi-val">{formatINR(totalCapital)}</span>
-          </div>
-        </div>
 
-        <div className="kpi-card">
-          <div className="kpi-icon-box cyan">
-            <DollarSign size={20} />
-          </div>
-          <div className="kpi-text">
-            <span className="kpi-label">Selected Exposure</span>
-            <span className="kpi-val">{formatINR(selectedCapital)}</span>
-          </div>
-        </div>
+          {/* Charts Grid */}
+          <div className="charts-grid">
+            {/* Monthly Profit Bar Chart */}
+            <div className="chart-card">
+              <h2 className="chart-title">Monthly Profit</h2>
+              <div className="chart-svg-container">
+                <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+                  <defs>
+                    <linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00d2ff" />
+                      <stop offset="100%" stopColor="rgba(0, 210, 255, 0.25)" />
+                    </linearGradient>
+                    <linearGradient id="bar-grad-loss" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ff1744" />
+                      <stop offset="100%" stopColor="rgba(255, 23, 68, 0.25)" />
+                    </linearGradient>
+                  </defs>
 
-        <div className="kpi-card">
-          <div className={`kpi-icon-box ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
-            <TrendingUp size={20} />
-          </div>
-          <div className="kpi-text">
-            <span className="kpi-label">Cumulative Profit / Loss</span>
-            <span className={`kpi-val ${totalCumulativeProfit >= 0 ? 'green' : 'red'}`}>
-              {totalCumulativeProfit >= 0 ? '+' : ''}{formatINR(totalCumulativeProfit)}
-            </span>
-          </div>
-        </div>
-      </div>
+                  {/* Grid Lines */}
+                  {barYGridTicks.map((tick, i) => {
+                    const y = yZero - (tick / barYLimit) * (plotHeight / 2);
+                    const isZero = tick === 0;
+                    return (
+                      <g key={i}>
+                        <line 
+                          x1={paddingLeft} 
+                          y1={y} 
+                          x2={width - paddingRight} 
+                          y2={y} 
+                          className={isZero ? "baseline-zero" : "grid-line"} 
+                        />
+                        <text 
+                          x={paddingLeft - 8} 
+                          y={y + 4} 
+                          textAnchor="end" 
+                          className="chart-axis-text"
+                        >
+                          {tick === 0 ? '0' : formatLabel(tick)}
+                        </text>
+                      </g>
+                    );
+                  })}
 
-      {/* Charts Grid */}
-      <div className="charts-grid">
-        {/* Monthly Profit Bar Chart */}
-        <div className="chart-card">
-          <h2 className="chart-title">Monthly Profit</h2>
-          <div className="chart-svg-container">
-            <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-              <defs>
-                <linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00d2ff" />
-                  <stop offset="100%" stopColor="rgba(0, 210, 255, 0.25)" />
-                </linearGradient>
-                <linearGradient id="bar-grad-loss" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ff1744" />
-                  <stop offset="100%" stopColor="rgba(255, 23, 68, 0.25)" />
-                </linearGradient>
-              </defs>
+                  {/* Bar Elements */}
+                  {monthlyTotals.map((item, idx) => {
+                    const { x, y, h, yVal } = getBarCoords(idx, item.profit);
+                    const barWidth = 36;
+                    const isHovered = hoveredBarIndex === idx;
+                    const hasValue = item.profit !== 0;
 
-              {/* Grid Lines */}
-              {barYGridTicks.map((tick, i) => {
-                const y = yZero - (tick / barYLimit) * (plotHeight / 2);
-                const isZero = tick === 0;
-                return (
-                  <g key={i}>
-                    <line 
-                      x1={paddingLeft} 
-                      y1={y} 
-                      x2={width - paddingRight} 
-                      y2={y} 
-                      className={isZero ? "baseline-zero" : "grid-line"} 
-                    />
-                    <text 
-                      x={paddingLeft - 8} 
-                      y={y + 4} 
-                      textAnchor="end" 
-                      className="chart-axis-text"
-                    >
-                      {tick === 0 ? '0' : formatLabel(tick)}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Bar Elements */}
-              {monthlyTotals.map((item, idx) => {
-                const { x, y, h, yVal } = getBarCoords(idx, item.profit);
-                const barWidth = 36;
-                const isHovered = hoveredBarIndex === idx;
-                const hasValue = item.profit !== 0;
-
-                return (
-                  <g 
-                    key={idx}
-                    onMouseEnter={() => setHoveredBarIndex(idx)}
-                    onMouseLeave={() => setHoveredBarIndex(null)}
-                  >
-                    {/* Background Column Highlight */}
-                    <rect
-                      x={x - barWidth}
-                      y={paddingTop}
-                      width={barWidth * 2}
-                      height={plotHeight}
-                      className={`bar-hover-rect ${isHovered ? 'active' : ''}`}
-                      rx={8}
-                    />
-
-                    {/* Actual Bar */}
-                    {hasValue && (
-                      <rect
-                        x={x - barWidth / 2}
-                        y={y}
-                        width={barWidth}
-                        height={Math.max(2, h)}
-                        fill={item.profit >= 0 ? "url(#bar-grad)" : "url(#bar-grad-loss)"}
-                        className="bar-rect"
-                        rx={4}
-                      />
-                    )}
-
-                    {/* Value Label */}
-                    {hasValue && (
-                      <text
-                        x={x}
-                        y={item.profit >= 0 ? y - 8 : y + h + 14}
-                        className="chart-label-text"
+                    return (
+                      <g 
+                        key={idx}
+                        onMouseEnter={() => setHoveredBarIndex(idx)}
+                        onMouseLeave={() => setHoveredBarIndex(null)}
                       >
-                        {formatLabel(item.profit)}
+                        {hasValue && (
+                          <rect
+                            x={x - barWidth / 2}
+                            y={y}
+                            width={barWidth}
+                            height={h}
+                            fill={item.profit >= 0 ? "url(#bar-grad)" : "url(#bar-grad-loss)"}
+                            rx={4}
+                            className="bar-rect"
+                          />
+                        )}
+                        {/* Hover overlay */}
+                        <rect
+                          x={x - colWidth / 2}
+                          y={paddingTop}
+                          width={colWidth}
+                          height={plotHeight}
+                          className={`bar-hover-rect ${isHovered ? 'active' : ''}`}
+                        />
+                        {/* Value label on top */}
+                        {hasValue && (
+                          <text
+                            x={x}
+                            y={yVal}
+                            textAnchor="middle"
+                            className="chart-label-text"
+                          >
+                            {formatLabel(item.profit)}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* X Axis Labels */}
+                  {MONTHS.map((month, idx) => {
+                    const colWidth = plotWidth / MONTHS.length;
+                    const x = paddingLeft + colWidth * idx + colWidth / 2;
+                    return (
+                      <text
+                        key={idx}
+                        x={x}
+                        y={height - paddingBottom + 20}
+                        textAnchor="middle"
+                        className="chart-axis-text"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {month}
                       </text>
-                    )}
-                  </g>
-                );
-              })}
-
-              {/* X Axis Labels */}
-              {MONTHS.map((month, idx) => {
-                const colWidth = plotWidth / MONTHS.length;
-                const x = paddingLeft + colWidth * idx + colWidth / 2;
-                return (
-                  <text
-                    key={idx}
-                    x={x}
-                    y={height - paddingBottom + 20}
-                    textAnchor="middle"
-                    className="chart-axis-text"
-                    style={{ fontWeight: 600 }}
+                    );
+                  })}
+                </svg>
+                
+                {/* HTML Tooltip on hover */}
+                {hoveredBarIndex !== null && (
+                  <div 
+                    className="chart-tooltip visible"
+                    style={{
+                      left: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).x) / width) * 100}%`,
+                      top: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).yVal) / height) * 100}%`
+                    }}
                   >
-                    {month}
-                  </text>
-                );
-              })}
-            </svg>
-            
-            {/* HTML Tooltip on hover */}
-            {hoveredBarIndex !== null && (
-              <div 
-                className="chart-tooltip visible"
-                style={{
-                  left: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).x) / width) * 100}%`,
-                  top: `${((getBarCoords(hoveredBarIndex, monthlyTotals[hoveredBarIndex].profit).yVal) / height) * 100}%`
-                }}
-              >
-                <strong>{MONTHS[hoveredBarIndex]} Profit/Loss:</strong> {formatINR(monthlyTotals[hoveredBarIndex].profit)}
+                    <strong>{MONTHS[hoveredBarIndex]} Profit/Loss:</strong> {formatINR(monthlyTotals[hoveredBarIndex].profit)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Cumulative Profit Line Chart */}
-        <div className="chart-card">
-          <h2 className="chart-title">Cumulative Profit</h2>
-          <div className="chart-svg-container">
-            <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
-              {/* Grid Lines */}
-              {lineYGridTicks.map((tick, i) => {
-                const y = paddingTop + plotHeight - ((tick - lineLimitMin) / lineRange) * plotHeight;
-                const isZero = Math.abs(tick) < 0.01;
-                return (
-                  <g key={i}>
-                    <line 
-                      x1={paddingLeft} 
-                      y1={y} 
-                      x2={width - paddingRight} 
-                      y2={y} 
-                      className={isZero ? "baseline-zero" : "grid-line"} 
+            {/* Cumulative Profit Line Chart */}
+            <div className="chart-card">
+              <h2 className="chart-title">Cumulative Profit</h2>
+              <div className="chart-svg-container">
+                <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+                  {/* Grid Lines */}
+                  {lineYGridTicks.map((tick, i) => {
+                    const y = paddingTop + plotHeight - ((tick - lineLimitMin) / lineRange) * plotHeight;
+                    const isZero = Math.abs(tick) < 0.01;
+                    return (
+                      <g key={i}>
+                        <line 
+                          x1={paddingLeft} 
+                          y1={y} 
+                          x2={width - paddingRight} 
+                          y2={y} 
+                          className={isZero ? "baseline-zero" : "grid-line"} 
+                        />
+                        <text 
+                          x={paddingLeft - 8} 
+                          y={y + 4} 
+                          textAnchor="end" 
+                          className="chart-axis-text"
+                        >
+                          {formatLabel(tick)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Vertical guideline on hover */}
+                  {hoveredLineIndex !== null && (
+                    <line
+                      x1={linePoints[hoveredLineIndex].x}
+                      y1={paddingTop}
+                      x2={linePoints[hoveredLineIndex].x}
+                      y2={paddingTop + plotHeight}
+                      className="guideline"
                     />
-                    <text 
-                      x={paddingLeft - 8} 
-                      y={y + 4} 
-                      textAnchor="end" 
-                      className="chart-axis-text"
-                    >
-                      {formatLabel(tick)}
-                    </text>
-                  </g>
-                );
-              })}
+                  )}
 
-              {/* Vertical guideline on hover */}
-              {hoveredLineIndex !== null && (
-                <line
-                  x1={linePoints[hoveredLineIndex].x}
-                  y1={paddingTop}
-                  x2={linePoints[hoveredLineIndex].x}
-                  y2={paddingTop + plotHeight}
-                  className="guideline"
-                />
-              )}
-
-              {/* Line Path */}
-              {linePoints.length > 0 && (
-                <path
-                  d={linePathD}
-                  fill="none"
-                  stroke="#00d2ff"
-                  strokeWidth={3}
-                  className="line-path"
-                />
-              )}
-
-              {/* Data points (circles) & labels */}
-              {cumulativeTotals.map((item, idx) => {
-                const pt = linePoints[idx];
-                const isHovered = hoveredLineIndex === idx;
-
-                return (
-                  <g key={idx}>
-                    {/* Circle Point */}
-                    <circle
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={isHovered ? 7 : 4}
-                      fill={isHovered ? '#00d2ff' : '#ffffff'}
+                  {/* Line Path */}
+                  {linePoints.length > 0 && (
+                    <path
+                      d={linePathD}
+                      fill="none"
                       stroke="#00d2ff"
-                      strokeWidth={isHovered ? 3 : 2}
-                      className="point-circle"
-                      onMouseEnter={() => setHoveredLineIndex(idx)}
-                      onMouseLeave={() => setHoveredLineIndex(null)}
+                      strokeWidth={3}
+                      className="line-path"
                     />
+                  )}
 
-                    {/* Value Label */}
-                    <text
-                      x={pt.x}
-                      y={pt.y - 12}
-                      className="chart-label-text"
-                    >
-                      {formatLabel(item.cumulative)}
-                    </text>
-                  </g>
-                );
-              })}
+                  {/* Data points (circles) & labels */}
+                  {cumulativeTotals.map((item, idx) => {
+                    const pt = linePoints[idx];
+                    const isHovered = hoveredLineIndex === idx;
 
-              {/* X Axis Labels */}
-              {MONTHS.map((month, idx) => {
-                const colWidth = plotWidth / MONTHS.length;
-                const x = paddingLeft + colWidth * idx + colWidth / 2;
-                return (
-                  <text
-                    key={idx}
-                    x={x}
-                    y={height - paddingBottom + 20}
-                    textAnchor="middle"
-                    className="chart-axis-text"
-                    style={{ fontWeight: 600 }}
+                    return (
+                      <g key={idx}>
+                        {/* Circle Point */}
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={isHovered ? 7 : 4}
+                          fill={isHovered ? '#00d2ff' : '#ffffff'}
+                          stroke="#00d2ff"
+                          strokeWidth={isHovered ? 3 : 2}
+                          className="point-circle"
+                          onMouseEnter={() => setHoveredLineIndex(idx)}
+                          onMouseLeave={() => setHoveredLineIndex(null)}
+                        />
+
+                        {/* Value Label */}
+                        <text
+                          x={pt.x}
+                          y={pt.y - 12}
+                          className="chart-label-text"
+                        >
+                          {formatLabel(item.cumulative)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* X Axis Labels */}
+                  {MONTHS.map((month, idx) => {
+                    const colWidth = plotWidth / MONTHS.length;
+                    const x = paddingLeft + colWidth * idx + colWidth / 2;
+                    return (
+                      <text
+                        key={idx}
+                        x={x}
+                        y={height - paddingBottom + 20}
+                        textAnchor="middle"
+                        className="chart-axis-text"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {month}
+                      </text>
+                    );
+                  })}
+                </svg>
+
+                {/* HTML Tooltip on hover */}
+                {hoveredLineIndex !== null && (
+                  <div 
+                    className="chart-tooltip visible"
+                    style={{
+                      left: `${(linePoints[hoveredLineIndex].x / width) * 100}%`,
+                      top: `${(linePoints[hoveredLineIndex].y / height) * 100}%`
+                    }}
                   >
-                    {month}
-                  </text>
-                );
-              })}
-            </svg>
-
-            {/* HTML Tooltip on hover */}
-            {hoveredLineIndex !== null && (
-              <div 
-                className="chart-tooltip visible"
-                style={{
-                  left: `${(linePoints[hoveredLineIndex].x / width) * 100}%`,
-                  top: `${(linePoints[hoveredLineIndex].y / height) * 100}%`
-                }}
-              >
-                <strong>Cumulative P&L:</strong> {formatINR(cumulativeTotals[hoveredLineIndex].cumulative)}
+                    <strong>Cumulative P&L:</strong> {formatINR(cumulativeTotals[hoveredLineIndex].cumulative)}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
+
+      {viewMode === 'performance' && realTrades.length > 0 && (
+        <>
+          {/* Performance stats row */}
+          <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+            <div className="kpi-card" style={{ background: 'rgba(21, 20, 26, 0.65)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '16px', backdropFilter: 'blur(16px)' }}>
+              <div className="kpi-icon-box cyan">
+                <Activity size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Sharpe Ratio</span>
+                <span className="kpi-val" style={{ color: performance.sharpe_ratio >= 1.5 ? '#00e676' : performance.sharpe_ratio >= 0 ? '#00d2ff' : '#ff1744' }}>
+                  {performance.sharpe_ratio.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="kpi-card" style={{ background: 'rgba(21, 20, 26, 0.65)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '16px', backdropFilter: 'blur(16px)' }}>
+              <div className="kpi-icon-box green">
+                <Percent size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Profit Factor</span>
+                <span className="kpi-val" style={{ color: performance.profit_factor >= 1.5 ? '#00e676' : '#ffffff' }}>
+                  {performance.profit_factor.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="kpi-card" style={{ background: 'rgba(21, 20, 26, 0.65)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '16px', backdropFilter: 'blur(16px)' }}>
+              <div className="kpi-icon-box red">
+                <TrendingUp size={20} style={{ transform: 'rotate(180deg)' }} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Max Drawdown</span>
+                <span className="kpi-val" style={{ color: '#ff1744' }}>
+                  -{performance.max_drawdown_pct.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="kpi-card" style={{ background: 'rgba(21, 20, 26, 0.65)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '16px', backdropFilter: 'blur(16px)' }}>
+              <div className="kpi-icon-box cyan">
+                <DollarSign size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Win/Loss Ratio</span>
+                <span className="kpi-val">
+                  {performance.win_loss_ratio.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="kpi-card" style={{ background: 'rgba(21, 20, 26, 0.65)', border: '1px solid rgba(255, 255, 255, 0.04)', borderRadius: '16px', backdropFilter: 'blur(16px)' }}>
+              <div className="kpi-icon-box green">
+                <Check size={20} />
+              </div>
+              <div className="kpi-text">
+                <span className="kpi-label">Win Rate %</span>
+                <span className="kpi-val" style={{ color: '#00e676' }}>
+                  {performance.win_rate_pct.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="charts-grid" style={{ marginBottom: '24px' }}>
+            {/* Cumulative Equity Curve Chart */}
+            <div className="chart-card">
+              <h2 className="chart-title">
+                <TrendingUp size={18} style={{ color: '#00d2ff' }} />
+                Cumulative Equity Curve (Trade-by-Trade)
+              </h2>
+              <div className="chart-svg-container">
+                {curveData && curveData.points.length > 0 ? (
+                  <>
+                    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%">
+                      {/* Grid Lines */}
+                      {curveData.yTicks.map((tick, i) => {
+                        const y = paddingTop + plotHeight - ((tick - curveData.yMin) / curveData.yRange) * plotHeight;
+                        return (
+                          <g key={i}>
+                            <line 
+                              x1={paddingLeft} 
+                              y1={y} 
+                              x2={width - paddingRight} 
+                              y2={y} 
+                              className="grid-line" 
+                            />
+                            <text 
+                              x={paddingLeft - 8} 
+                              y={y + 4} 
+                              textAnchor="end" 
+                              className="chart-axis-text"
+                            >
+                              {formatLabel(tick)}
+                            </text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Line Path */}
+                      <path
+                        d={curveData.pathD}
+                        fill="none"
+                        stroke="#00d2ff"
+                        strokeWidth={3.5}
+                        className="line-path"
+                        style={{ filter: 'drop-shadow(0 0 4px rgba(0, 210, 255, 0.35))' }}
+                      />
+
+                      {/* Guideline on hover */}
+                      {hoveredEquityIndex !== null && (
+                        <line
+                          x1={curveData.points[hoveredEquityIndex].x}
+                          y1={paddingTop}
+                          x2={curveData.points[hoveredEquityIndex].x}
+                          y2={paddingTop + plotHeight}
+                          className="guideline"
+                        />
+                      )}
+
+                      {/* Circles */}
+                      {curveData.points.map((pt, idx) => {
+                        const isHovered = hoveredEquityIndex === idx;
+                        return (
+                          <circle
+                            key={idx}
+                            cx={pt.x}
+                            cy={pt.y}
+                            r={isHovered ? 7 : 3.5}
+                            fill={isHovered ? '#00d2ff' : '#ffffff'}
+                            stroke="#00d2ff"
+                            strokeWidth={isHovered ? 3 : 2}
+                            onMouseEnter={() => setHoveredEquityIndex(idx)}
+                            onMouseLeave={() => setHoveredEquityIndex(null)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        );
+                      })}
+                    </svg>
+
+                    {hoveredEquityIndex !== null && (
+                      <div 
+                        className="chart-tooltip visible"
+                        style={{
+                          left: `${(curveData.points[hoveredEquityIndex].x / width) * 100}%`,
+                          top: `${(curveData.points[hoveredEquityIndex].y / height) * 100}%`
+                        }}
+                      >
+                        <div><strong>Equity:</strong> {formatINR(curveData.points[hoveredEquityIndex].val)}</div>
+                        <div style={{ fontSize: '10px', color: '#8a90a6', marginTop: '2px' }}>{curveData.points[hoveredEquityIndex].date}</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '100px 0', color: '#8a90a6', fontStyle: 'italic' }}>
+                    Insufficient trade data to plot equity curve.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Daily Performance Calendar */}
+            <div className="chart-card">
+              <h2 className="chart-title">
+                <Calendar size={18} style={{ color: '#ffd54f' }} />
+                Daily Returns Calendar ({calendarData.monthName} {calendarData.year})
+              </h2>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginTop: '10px' }}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+                  <div key={day} style={{ textAlign: 'center', fontSize: '11px', color: '#8a90a6', fontWeight: 700, paddingBottom: '6px' }}>
+                    {day}
+                  </div>
+                ))}
+
+                {calendarData.days.map((day, idx) => {
+                  if (day === null) {
+                    return <div key={`empty-${idx}`} style={{ aspectRatio: '1', borderRadius: '6px', background: 'transparent' }} />;
+                  }
+
+                  const dateStr = `${calendarData.year}-${String(calendarData.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const dailyPnl = performance.calendar_map[dateStr];
+                  const hasTrades = dailyPnl !== undefined;
+                  
+                  let bg = 'rgba(255,255,255,0.03)';
+                  let border = '1px solid rgba(255,255,255,0.05)';
+                  let textColor = '#8a90a6';
+                  let shadow = 'none';
+
+                  if (hasTrades) {
+                    textColor = '#ffffff';
+                    if (dailyPnl > 0) {
+                      bg = `rgba(0, 230, 118, ${Math.min(0.2 + dailyPnl/15000, 0.85)})`;
+                      border = '1px solid rgba(0, 230, 118, 0.4)';
+                      shadow = '0 0 10px rgba(0, 230, 118, 0.15)';
+                    } else if (dailyPnl < 0) {
+                      bg = `rgba(255, 23, 68, ${Math.min(0.2 + Math.abs(dailyPnl)/15000, 0.85)})`;
+                      border = '1px solid rgba(255, 23, 68, 0.4)';
+                      shadow = '0 0 10px rgba(255, 23, 68, 0.15)';
+                    } else {
+                      bg = 'rgba(255,255,255,0.12)';
+                      border = '1px solid rgba(255,255,255,0.2)';
+                    }
+                  }
+
+                  return (
+                    <div 
+                      key={`day-${day}`}
+                      className="calendar-day-box"
+                      style={{
+                        aspectRatio: '1',
+                        borderRadius: '8px',
+                        background: bg,
+                        border: border,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        boxShadow: shadow,
+                        cursor: hasTrades ? 'pointer' : 'default',
+                        transition: 'transform 0.15s ease'
+                      }}
+                      title={hasTrades ? `Net P&L: ${formatINR(dailyPnl)}` : undefined}
+                    >
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: textColor }}>{day}</span>
+                      {hasTrades && (
+                        <span style={{ 
+                          fontSize: '8px', 
+                          fontWeight: 800, 
+                          color: dailyPnl >= 0 ? '#00e676' : '#ff1744',
+                          marginTop: '2px' 
+                        }}>
+                          {dailyPnl > 0 ? '+' : ''}{formatLabel(dailyPnl)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
