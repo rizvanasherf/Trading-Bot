@@ -875,6 +875,7 @@ export default function AnalysisDashboard({ apiBase }) {
                   {monthlyTotals.map((item, idx) => {
                     const { x, y, h, yVal } = getBarCoords(idx, item.profit);
                     const barWidth = 36;
+                    const colWidth = plotWidth / MONTHS.length;
                     const isHovered = hoveredBarIndex === idx;
                     const hasValue = item.profit !== 0;
 
