@@ -80,6 +80,7 @@ class Backtester:
         risk = config.get("risk", {})
         self.initial_capital: float = risk.get("capital", 500_000)
         self.risk_per_trade: float = risk.get("risk_per_trade", 0.01)
+        self.max_stock_concentration: float = risk.get("max_stock_concentration", 0.20)
 
     # ── Bar-by-bar loop ────────────────────────────────────────────────────────
 
@@ -142,7 +143,13 @@ class Backtester:
                     sig = signals[0]
                     risk_amt = capital * self.risk_per_trade
                     price_risk = abs(sig.entry_price - sig.stop_loss)
-                    qty = int(risk_amt / price_risk) if price_risk > 0 else 0
+                    qty_by_risk = int(risk_amt / price_risk) if price_risk > 0 else 0
+                    
+                    # Apply concentration limit
+                    max_allowed_exposure = capital * self.max_stock_concentration
+                    qty_by_concentration = int(max_allowed_exposure / sig.entry_price) if sig.entry_price > 0 else 0
+                    
+                    qty = min(qty_by_risk, qty_by_concentration)
                     if qty > 0:
                         active_trade = BacktestTrade(
                             symbol=symbol,

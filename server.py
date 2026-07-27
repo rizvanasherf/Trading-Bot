@@ -143,86 +143,96 @@ def run_scanning_loop():
             
             # 2. Check daily circuit breakers
             allowed, reason = risk_manager.can_trade(active_positions_count=len(order_executor.open_positions))
-            if not allowed:
-                logger.warning(f"Scanner halted: {reason}")
-                scanning_active = False
-                continue
-                
-            # 3. Fetch configurations
+            
+            ltps = {}
+            fetch_results = []
             strategy_type = global_config["strategy"].get("strategy_type", "fibonacci")
             secondary_strategy_type = global_config["strategy"].get("secondary_strategy_type", "none")
             
-            scan_tasks = []
-            if strategy_type == "cpr_intraday":
-                scan_tasks.append(("NIFTY", "5minute", strategy))
-                if secondary_strategy_type != "none" and secondary_strategy is not None:
+            if allowed:
+                # 3. Fetch configurations
+                scan_tasks = []
+                if strategy_type == "cpr_intraday":
+                    scan_tasks.append(("NIFTY", "5minute", strategy))
+                    if secondary_strategy_type != "none" and secondary_strategy is not None:
+                        stock_symbols = global_config["strategy"].get("symbols", [])
+                        stock_timeframe = global_config["strategy"].get("timeframe", "15minute")
+                        for sym in stock_symbols:
+                            if sym != "NIFTY":
+                                scan_tasks.append((sym, stock_timeframe, secondary_strategy))
+                else:
                     stock_symbols = global_config["strategy"].get("symbols", [])
                     stock_timeframe = global_config["strategy"].get("timeframe", "15minute")
                     for sym in stock_symbols:
-                        if sym != "NIFTY":
-                            scan_tasks.append((sym, stock_timeframe, secondary_strategy))
-            else:
-                stock_symbols = global_config["strategy"].get("symbols", [])
-                stock_timeframe = global_config["strategy"].get("timeframe", "15minute")
-                for sym in stock_symbols:
-                    scan_tasks.append((sym, stock_timeframe, strategy))
-            
-            # Fetch data concurrently for all scan tasks
-            def fetch_task_data(task):
-                sym, tf, strat_inst = task
-                try:
-                    ltp = data_fetcher.get_ltp(sym)
-                    df_hist = data_fetcher.get_historical_data(sym, interval=tf, days=5)
-                    return sym, ltp, df_hist, strat_inst
-                except Exception as e:
-                    logger.error(f"Error fetching data for concurrent scan on {sym}: {e}")
-                    return sym, None, None, None
-
-            with ThreadPoolExecutor(max_workers=min(len(scan_tasks), 15)) as executor:
-                fetch_results = list(executor.map(fetch_task_data, scan_tasks))
-
-            ltps = {}
-            for sym, ltp, df_hist, strat_inst in fetch_results:
-                if ltp is None or df_hist is None or df_hist.empty or strat_inst is None:
-                    continue
-                ltps[sym] = ltp
+                        scan_tasks.append((sym, stock_timeframe, strategy))
                 
-                try:
-                    # Check circuit breakers for specific stock
-                    can_tr, _ = risk_manager.can_trade(sym, active_positions_count=len(order_executor.open_positions))
-                    if not can_tr:
+                # Fetch data concurrently for all scan tasks
+                def fetch_task_data(task):
+                    sym, tf, strat_inst = task
+                    try:
+                        ltp = data_fetcher.get_ltp(sym)
+                        df_hist = data_fetcher.get_historical_data(sym, interval=tf, days=5)
+                        return sym, ltp, df_hist, strat_inst
+                    except Exception as e:
+                        logger.error(f"Error fetching data for concurrent scan on {sym}: {e}")
+                        return sym, None, None, None
+
+                if scan_tasks:
+                    with ThreadPoolExecutor(max_workers=min(len(scan_tasks), 15)) as executor:
+                        fetch_results = list(executor.map(fetch_task_data, scan_tasks))
+
+                for sym, ltp, df_hist, strat_inst in fetch_results:
+                    if ltp is None or df_hist is None or df_hist.empty or strat_inst is None:
                         continue
-                        
-                    # Evaluate strategy signals
-                    signals = strat_inst.generate_signals(sym, df_hist)
-                    if signals:
-                        sig = signals[0]
-                        open_syms = [p.symbol for p in order_executor.open_positions]
-                        
-                        if sym not in open_syms:
-                            # Volatility-adjusted sizing
-                            atr_val = None
-                            try:
-                                atr_series = strat_inst._atr(df_hist)
-                                if not atr_series.empty:
-                                    atr_val = float(atr_series.iloc[-1])
-                            except Exception as ex:
-                                logger.error(f"Error calculating ATR for sizing: {ex}")
+                    ltps[sym] = ltp
+                    
+                    try:
+                        # Check circuit breakers for specific stock
+                        can_tr, _ = risk_manager.can_trade(sym, active_positions_count=len(order_executor.open_positions))
+                        if not can_tr:
+                            continue
                             
-                            qty = risk_manager.calculate_position_size(sym, sig.entry_price, sig.stop_loss, atr=atr_val)
-                            if qty > 0:
-                                # Idempotency deduplication check
-                                date_str = sig.timestamp.strftime("%Y-%m-%d")
-                                if not signal_tracker.check_and_add(sym, sig.direction.value, date_str):
-                                    logger.info(f"[{sym}] Signal for {sig.direction.value} already executed today. Skipping double placement.")
-                                    continue
+                        # Evaluate strategy signals
+                        signals = strat_inst.generate_signals(sym, df_hist)
+                        if signals:
+                            sig = signals[0]
+                            open_syms = [p.symbol for p in order_executor.open_positions]
+                            
+                            if sym not in open_syms:
+                                # Volatility-adjusted sizing
+                                atr_val = None
+                                try:
+                                    atr_series = strat_inst._atr(df_hist)
+                                    if not atr_series.empty:
+                                        atr_val = float(atr_series.iloc[-1])
+                                except Exception as ex:
+                                    logger.error(f"Error calculating ATR for sizing: {ex}")
                                 
-                                pos = order_executor.execute_entry(sig, qty)
-                                if pos:
-                                    risk_manager.add_position_exposure(sym, qty * sig.entry_price)
-                                    logger.info(f"[{sym}] Target entry filled. {qty} shares @ {sig.entry_price}")
-                except Exception as e:
-                    logger.error(f"Error scanning symbol {sym} strategy: {e}")
+                                qty = risk_manager.calculate_position_size(sym, sig.entry_price, sig.stop_loss, atr=atr_val)
+                                if qty > 0:
+                                    # Idempotency deduplication check
+                                    date_str = sig.timestamp.strftime("%Y-%m-%d")
+                                    if not signal_tracker.check_and_add(sym, sig.direction.value, date_str):
+                                        logger.info(f"[{sym}] Signal for {sig.direction.value} already executed today. Skipping double placement.")
+                                        continue
+                                    
+                                    pos = order_executor.execute_entry(sig, qty)
+                                    if pos:
+                                        risk_manager.add_position_exposure(sym, qty * sig.entry_price)
+                                        logger.info(f"[{sym}] Target entry filled. {qty} shares @ {sig.entry_price}")
+                    except Exception as e:
+                        logger.error(f"Error scanning symbol {sym} strategy: {e}")
+            else:
+                logger.warning(f"New entries suspended due to circuit breaker: {reason}")
+                # Fetch LTPs only for open positions to allow exit checking
+                open_positions_symbols = list(set(pos.symbol for pos in order_executor.open_positions))
+                for sym in open_positions_symbols:
+                    try:
+                        ltp_val = data_fetcher.get_ltp(sym)
+                        if ltp_val is not None:
+                            ltps[sym] = ltp_val
+                    except Exception as e:
+                        logger.error(f"Error fetching exit LTP for open position {sym}: {e}")
 
             # If active strategy is cpr_intraday, update the global cpr_data from the scan result
             if strategy_type == "cpr_intraday" and strategy is not None:

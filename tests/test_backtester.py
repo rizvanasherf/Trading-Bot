@@ -113,3 +113,48 @@ def test_no_lookahead_bias(backtest_config, test_data):
     assert max(max_lengths_checked) <= len(test_data)
     # The first window checked is warmup (which is max(3*2+20, 40) = 40)
     assert min(max_lengths_checked) == 41 # index 40 is 41st bar
+
+
+def test_backtester_concentration_limit(backtest_config):
+    # Set high risk per trade to trigger large sizing, but low concentration cap
+    backtest_config["risk"]["risk_per_trade"] = 0.50 # 50% risk per trade
+    backtest_config["risk"]["max_stock_concentration"] = 0.10 # 10% maximum stock concentration
+    tester = Backtester(backtest_config)
+    
+    # Mock a simple signal
+    from core.strategy import Signal, Direction
+    sig = Signal(
+        symbol="TEST",
+        direction=Direction.LONG,
+        entry_price=100.0,
+        stop_loss=99.0, # 1% risk distance
+        target=110.0,
+        fib_level=0.618,
+        swing_high=105.0,
+        swing_low=95.0,
+        timestamp=pd.Timestamp.now()
+    )
+    
+    # Capital is 100,000. Risk amount = 50% = 50,000.
+    # Price risk = 1.0.
+    # Qty by risk = 50,000 / 1.0 = 50,000 shares (5,000,000 exposure).
+    # Concentration limit: 10% of 100,000 = 10,000 exposure / 100 entry price = 100 shares.
+    # Sizing should be capped at 100 shares.
+    
+    from datetime import datetime, timedelta
+    dates = [datetime.now() - timedelta(minutes=15 * i) for i in range(42)]
+    df = pd.DataFrame({
+        "open": [100.0] * 42,
+        "high": [101.0] * 42,
+        "low": [99.5] * 42,
+        "close": [100.5] * 42,
+        "volume": [1000.0] * 42
+    }, index=dates[::-1])
+    
+    # Let's check that running with a mocked strategy signal handles the limit
+    tester.strategy.generate_signals = lambda sym, window: [sig]
+    
+    res = tester.run("TEST", df)
+    # The active trade quantity should have been capped at 100 (concentration) rather than 50,000 (risk)
+    assert len(res.trades) > 0
+    assert res.trades[0].qty == 100
