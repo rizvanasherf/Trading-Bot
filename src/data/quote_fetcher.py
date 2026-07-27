@@ -137,6 +137,10 @@ class BatchQuoteFetcher:
             return quotes[symbol]["last_price"]
         
         # Absolute fallback base price
+        from config.settings import settings
+        if settings.angel_configured:
+            raise ConnectionError(f"Angel One quote fetch failed for {symbol} while credentials are configured.")
+            
         from core.data_fetcher import MOCK_BASE_PRICES
         import random
         base = MOCK_BASE_PRICES.get(symbol.upper(), 1000.0)
