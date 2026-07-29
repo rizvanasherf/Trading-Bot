@@ -10,6 +10,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
+      - .env:/app/.env
     ports:
       - "8000:8000"
 
