@@ -92,7 +92,7 @@ class AngelConnector:
         try:
             logger.info("Fetching instrument list from Angel One calculator CDN...")
             url = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
-            res = requests.get(url, timeout=15)
+            res = requests.get(url, timeout=60)
             if res.status_code == 200:
                 data = res.json()
                 temp_map = {}
@@ -133,8 +133,19 @@ class AngelConnector:
                 logger.success(f"Cached {len(self.token_map)} instrument mappings.")
             else:
                 logger.error(f"Failed to fetch instruments: Status code {res.status_code}")
+                if cache_path.exists():
+                    with open(cache_path, "r", encoding="utf-8") as f:
+                        self.token_map = json.load(f)
+                    logger.warning(f"Loaded stale instrument mappings from cache as a fallback ({len(self.token_map)} entries).")
         except Exception as e:
             logger.error(f"Error building instrument token map: {e}")
+            if cache_path.exists():
+                try:
+                    with open(cache_path, "r", encoding="utf-8") as f:
+                        self.token_map = json.load(f)
+                    logger.warning(f"Loaded stale instrument mappings from cache as a fallback ({len(self.token_map)} entries).")
+                except Exception as cache_err:
+                    logger.error(f"Failed to load fallback instruments cache: {cache_err}")
 
     def get_token_info(self, symbol: str) -> Tuple[Optional[str], Optional[str]]:
         """Resolve a symbol (e.g. 'RELIANCE') to (token, trading_symbol)."""
