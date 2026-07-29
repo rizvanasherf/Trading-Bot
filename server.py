@@ -73,7 +73,16 @@ def save_yaml_config(cfg: dict) -> None:
 def init_trading_components():
     global global_config, data_fetcher, strategy, secondary_strategy, risk_manager, order_executor
     
-    # Reload settings singleton to fetch any updated .env variables
+    # Reload settings singleton to fetch any updated .env variables.
+    # Force clear env-file keys from os.environ to bypass Docker's OS-level environment cache.
+    env_keys = [
+        "ANGEL_API_KEY", "ANGEL_CLIENT_ID", "ANGEL_PIN", "ANGEL_TOTP_SECRET",
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRADING_MODE"
+    ]
+    import os
+    for key in env_keys:
+        os.environ.pop(key, None)
+        
     new_settings = settings.__class__()
     fields = settings.model_fields.keys() if hasattr(settings, "model_fields") else settings.__fields__.keys()
     for field_name in fields:
