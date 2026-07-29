@@ -16,6 +16,8 @@ from src.utils.cache import MarketDataCache
 from src.data.angel_connector import connector
 
 class AngelHistoricalFetcher:
+    _cool_down_until = 0.0
+
     INTERVAL_LIMITS = {
         "ONE_MINUTE": 30,
         "THREE_MINUTE": 60,
@@ -53,6 +55,15 @@ class AngelHistoricalFetcher:
         cached_df = self.cache.get_df(cache_key)
         if cached_df is not None:
             return cached_df
+
+        # Check rate-limit cool down status to bypass requests during active block windows
+        current_time = time.time()
+        if current_time < self.__class__._cool_down_until:
+            logger.warning(
+                f"[Historical Fetcher] Angel One API is in rate-limit cooling-down. "
+                f"Bypassing direct API query for {symbol} and letting fallback handle it."
+            )
+            return pd.DataFrame()
 
         # Resolve symbol token
         token, trading_symbol = connector.get_token_info(symbol)
@@ -115,9 +126,23 @@ class AngelHistoricalFetcher:
                     df_chunk = pd.DataFrame(candles, columns=["date", "open", "high", "low", "close", "volume"])
                     all_dfs.append(df_chunk)
                 else:
-                    logger.warning(f"[{symbol}] API chunk fetch failed: {res.get('message')}")
+                    msg = res.get("message", "")
+                    logger.warning(f"[{symbol}] API chunk fetch failed: {msg}")
+                    if "exceeding access rate" in str(msg).lower() or "access rate" in str(msg).lower() or "AG7002" in str(msg):
+                        self.__class__._cool_down_until = time.time() + 300
+                        logger.warning(
+                            f"[Historical Fetcher] Exceeded Angel One access rate limit. "
+                            f"Enforcing a 5-minute cool-down for all Angel One historical API requests to prevent block extension."
+                        )
             except Exception as e:
                 logger.error(f"[{symbol}] Exception during API chunk fetch: {e}")
+                err_str = str(e).lower()
+                if "exceeding access rate" in err_str or "access rate" in err_str or "rate limit" in err_str:
+                    self.__class__._cool_down_until = time.time() + 300
+                    logger.warning(
+                        f"[Historical Fetcher] Exceeded Angel One access rate limit. "
+                        f"Enforcing a 5-minute cool-down for all Angel One historical API requests to prevent block extension."
+                    )
 
         if not all_dfs:
             self.cache.set_df(cache_key, pd.DataFrame(), 15)
