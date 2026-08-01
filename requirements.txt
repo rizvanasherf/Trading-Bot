@@ -19,3 +19,4 @@ yfinance
 logzero
 websocket-client
 pyarrow
+sqlalchemy

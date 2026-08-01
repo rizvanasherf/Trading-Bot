@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # ── Trading mode ──────────────────────────────────────────────────────────
     TRADING_MODE: Literal["paper", "live"] = "paper"
+    DATABASE_URL: str = "sqlite:///config/trading_bot.db"
 
     @property
     def angel_configured(self) -> bool:

@@ -278,37 +278,32 @@ class OrderExecutor:
             logger.error(f"[{pos.symbol}] Target order placement failed: {exc}")
 
     def _log_closed_trade(self, pos: Position, exit_price: float) -> None:
-        """Append closed trade details to logs/trade_history.csv."""
-        import os
-        import csv
+        """Insert closed trade details to SQL database."""
         from utils.helpers import now_ist
+        from core.db import SessionLocal, Trade
         
-        file_path = "logs/trade_history.csv"
-        os.makedirs("logs", exist_ok=True)
-        
-        file_exists = os.path.exists(file_path)
-        
-        row = {
-            "timestamp": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
-            "id": pos.id,
-            "symbol": pos.symbol,
-            "direction": pos.direction.value,
-            "qty": pos.qty,
-            "entry_price": round(pos.entry_price, 2),
-            "exit_price": round(exit_price, 2),
-            "pnl": round(pos.pnl, 2),
-            "exit_reason": pos.status,
-            "entry_time": pos.entry_time.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
+        db = SessionLocal()
         try:
-            with open(file_path, "a", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=list(row.keys()))
-                if not file_exists:
-                    writer.writeheader()
-                writer.writerow(row)
+            db_trade = Trade(
+                id=pos.id,
+                timestamp=now_ist().replace(tzinfo=None), # Naive timestamp for SQLite/DB compatibility
+                symbol=pos.symbol,
+                direction=pos.direction.value if hasattr(pos.direction, "value") else str(pos.direction),
+                qty=int(pos.qty),
+                entry_price=round(float(pos.entry_price), 2),
+                exit_price=round(float(exit_price), 2),
+                pnl=round(float(pos.pnl), 2),
+                exit_reason=str(pos.status),
+                entry_time=pos.entry_time.replace(tzinfo=None)
+            )
+            db.add(db_trade)
+            db.commit()
+            logger.info(f"[Database] Logged closed trade for {pos.symbol} (PnL: ₹{pos.pnl}) to SQL database.")
         except Exception as e:
-            logger.error(f"Failed to log trade to CSV: {e}")
+            logger.error(f"[Database] Failed to log closed trade for {pos.symbol}: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     # ── PnL updater ────────────────────────────────────────────────────────────
 

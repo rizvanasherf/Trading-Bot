@@ -99,7 +99,7 @@ def init_trading_components():
     # Force clear env-file keys from os.environ to bypass Docker's OS-level environment cache.
     env_keys = [
         "ANGEL_API_KEY", "ANGEL_CLIENT_ID", "ANGEL_PIN", "ANGEL_TOTP_SECRET",
-        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRADING_MODE"
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRADING_MODE", "DATABASE_URL"
     ]
     import os
     for key in env_keys:
@@ -154,6 +154,75 @@ def init_trading_components():
 
 # Initial core setup
 init_trading_components()
+
+# Initial database connection setup & CSV migration
+from core.db import init_db
+init_db()
+
+def migrate_csv_to_sqlite():
+    trade_history_file = Path("logs/trade_history.csv")
+    if not trade_history_file.exists():
+        return
+
+    import pandas as pd
+    from core.db import SessionLocal, Trade
+    
+    db = SessionLocal()
+    try:
+        existing_count = db.query(Trade).count()
+        if existing_count > 0:
+            logger.info(f"[Migration] Database already initialized with {existing_count} records. Skipping CSV migration.")
+            return
+
+        logger.info("[Migration] Starting automatic trade history migration from logs/trade_history.csv to SQL database...")
+        df = pd.read_csv(trade_history_file)
+        if df.empty:
+            logger.info("[Migration] CSV file is empty. Nothing to migrate.")
+            return
+
+        imported_count = 0
+        for _, row in df.iterrows():
+            try:
+                trade_id = str(row.get("id", f"MIGRATED_{imported_count}"))
+                timestamp_val = pd.to_datetime(row.get("timestamp"))
+                entry_time_val = pd.to_datetime(row.get("entry_time")) if pd.notna(row.get("entry_time")) else timestamp_val
+                
+                qty_val = int(row.get("qty", 0)) if pd.notna(row.get("qty")) else 0
+                entry_price_val = float(row.get("entry_price", 0.0)) if pd.notna(row.get("entry_price")) else 0.0
+                exit_price_val = float(row.get("exit_price", 0.0)) if pd.notna(row.get("exit_price")) else 0.0
+                pnl_val = float(row.get("pnl", 0.0)) if pd.notna(row.get("pnl")) else 0.0
+
+                db_trade = Trade(
+                    id=trade_id,
+                    timestamp=timestamp_val.to_pydatetime() if hasattr(timestamp_val, "to_pydatetime") else timestamp_val,
+                    symbol=str(row.get("symbol", "")),
+                    direction=str(row.get("direction", "")),
+                    qty=qty_val,
+                    entry_price=entry_price_val,
+                    exit_price=exit_price_val,
+                    pnl=pnl_val,
+                    exit_reason=str(row.get("exit_reason", "")),
+                    entry_time=entry_time_val.to_pydatetime() if hasattr(entry_time_val, "to_pydatetime") else entry_time_val
+                )
+                db.add(db_trade)
+                imported_count += 1
+            except Exception as row_err:
+                logger.warning(f"[Migration] Skipping corrupt CSV row during migration: {row_err}")
+
+        db.commit()
+        logger.success(f"[Migration] Successfully migrated {imported_count} trades from logs/trade_history.csv to SQL database.")
+        
+        backup_file = Path("logs/trade_history.csv.bak")
+        if not backup_file.exists():
+            trade_history_file.rename(backup_file)
+            logger.info("[Migration] Renamed logs/trade_history.csv to logs/trade_history.csv.bak for safety.")
+    except Exception as e:
+        logger.error(f"[Migration] CSV Migration failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+migrate_csv_to_sqlite()
 
 # ── Background Scanning Loop ──────────────────────────────────────────────────
 
@@ -521,8 +590,20 @@ def squareoff_position_endpoint(pos_id: str):
 
 @app.post("/api/trades/clear")
 def clear_trades():
+    from core.db import SessionLocal, Trade
     try:
-        # 1. Clear CSV log file
+        # 1. Clear SQL database table
+        db = SessionLocal()
+        try:
+            db.query(Trade).delete()
+            db.commit()
+        except Exception as db_err:
+            logger.error(f"Database error during clear trades: {db_err}")
+            db.rollback()
+        finally:
+            db.close()
+            
+        # Also clear CSV backup file if it exists
         trade_history_file = Path("logs/trade_history.csv")
         if trade_history_file.exists():
             with open(trade_history_file, "w", encoding="utf-8") as f:
@@ -548,11 +629,36 @@ def clear_trades():
 @app.get("/api/trades/download")
 def download_trades():
     from fastapi.responses import FileResponse
+    from core.db import SessionLocal, Trade
+    import csv
+    
     trade_history_file = Path("logs/trade_history.csv")
-    if not trade_history_file.exists():
-        trade_history_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(trade_history_file, "w", encoding="utf-8") as f:
-            f.write("timestamp,id,symbol,direction,qty,entry_price,exit_price,pnl,exit_reason,entry_time\n")
+    trade_history_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    db = SessionLocal()
+    try:
+        trades = db.query(Trade).order_by(Trade.timestamp.desc()).all()
+        with open(trade_history_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["timestamp","id","symbol","direction","qty","entry_price","exit_price","pnl","exit_reason","entry_time"])
+            for t in trades:
+                writer.writerow([
+                    t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
+                    t.id,
+                    t.symbol,
+                    t.direction,
+                    t.qty,
+                    t.entry_price,
+                    t.exit_price,
+                    t.pnl,
+                    t.exit_reason,
+                    t.entry_time.strftime("%Y-%m-%d %H:%M:%S") if t.entry_time else ""
+                ])
+    except Exception as e:
+        logger.error(f"Error compiling trade download CSV: {e}")
+    finally:
+        db.close()
+        
     return FileResponse(
         path=trade_history_file,
         filename="trade_history.csv",
@@ -563,8 +669,8 @@ def download_trades():
 def get_performance_analytics():
     import pandas as pd
     import numpy as np
+    from core.db import SessionLocal, Trade
     
-    trade_history_file = Path("logs/trade_history.csv")
     capital = global_config.get("risk", {}).get("capital", 500_000.0)
     
     default_res = {
@@ -578,11 +684,26 @@ def get_performance_analytics():
         "win_rate_pct": 0.0
     }
     
-    if not trade_history_file.exists():
-        return default_res
-        
+    db = SessionLocal()
     try:
-        df = pd.read_csv(trade_history_file)
+        trades = db.query(Trade).order_by(Trade.timestamp.asc()).all()
+        if not trades:
+            return default_res
+            
+        data = []
+        for t in trades:
+            data.append({
+                "timestamp": t.timestamp,
+                "symbol": t.symbol,
+                "direction": t.direction,
+                "qty": t.qty,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl": t.pnl,
+                "exit_reason": t.exit_reason
+            })
+            
+        df = pd.DataFrame(data)
         if df.empty:
             return default_res
             
@@ -669,76 +790,68 @@ def get_performance_analytics():
     except Exception as e:
         logger.error(f"Error calculating performance analytics: {e}")
         return default_res
+    finally:
+        db.close()
 
 @app.get("/api/trades")
 def get_trades(period: str = "Today's Trades"):
-    trade_history_file = Path("logs/trade_history.csv")
-    if not trade_history_file.exists():
-        return []
-        
+    from core.db import SessionLocal, Trade
+    from sqlalchemy import and_, extract, func
     import pandas as pd
+    
+    db = SessionLocal()
     try:
-        df_trades = pd.read_csv(trade_history_file)
-        if df_trades.empty:
-            return []
-            
-        df_trades['dt'] = pd.to_datetime(df_trades['timestamp'])
-        today = now_ist().date()
-        yesterday = today - pd.Timedelta(days=1)
-        start_of_week = today - pd.Timedelta(days=7)
+        query = db.query(Trade)
         
-        # Filter logic
+        today = now_ist().date()
+        
         if period == "Today's Trades":
-            df_filtered = df_trades[df_trades['dt'].dt.date == today]
+            query = query.filter(func.date(Trade.timestamp) == today.strftime("%Y-%m-%d"))
         elif period == "Yesterday's Trades":
-            df_filtered = df_trades[df_trades['dt'].dt.date == yesterday]
+            yesterday = today - pd.Timedelta(days=1)
+            query = query.filter(func.date(Trade.timestamp) == yesterday.strftime("%Y-%m-%d"))
         elif period == "This Month's Trades":
-            df_filtered = df_trades[
-                (df_trades['dt'].dt.year == today.year) & 
-                (df_trades['dt'].dt.month == today.month)
-            ]
+            query = query.filter(
+                and_(
+                    extract("year", Trade.timestamp) == today.year,
+                    extract("month", Trade.timestamp) == today.month
+                )
+            )
         elif period == "Last Month's Trades":
             last_month_val = 12 if today.month == 1 else today.month - 1
             last_month_year = today.year - 1 if today.month == 1 else today.year
-            df_filtered = df_trades[
-                (df_trades['dt'].dt.year == last_month_year) & 
-                (df_trades['dt'].dt.month == last_month_val)
-            ]
+            query = query.filter(
+                and_(
+                    extract("year", Trade.timestamp) == last_month_year,
+                    extract("month", Trade.timestamp) == last_month_val
+                )
+            )
         elif period == "Last 7 Days":
-            df_filtered = df_trades[df_trades['dt'].dt.date >= start_of_week]
-        else:  # All Historical Trades
-            df_filtered = df_trades
-            
-        if df_filtered.empty:
-            return []
-            
-        df_filtered = df_filtered.sort_values(by="dt", ascending=False)
+            start_of_week = today - pd.Timedelta(days=7)
+            query = query.filter(func.date(Trade.timestamp) >= start_of_week.strftime("%Y-%m-%d"))
         
+        # Order descending by timestamp
+        query = query.order_by(Trade.timestamp.desc())
+        
+        trades = query.all()
         trades_list = []
-        for _, row in df_filtered.iterrows():
-            try:
-                qty_val = int(row["qty"]) if pd.notna(row.get("qty")) else 0
-                entry_price_val = float(row["entry_price"]) if pd.notna(row.get("entry_price")) else 0.0
-                exit_price_val = float(row["exit_price"]) if pd.notna(row.get("exit_price")) else 0.0
-                pnl_val = float(row["pnl"]) if pd.notna(row.get("pnl")) else 0.0
-                
-                trades_list.append({
-                    "timestamp": str(row.get("timestamp", "")),
-                    "symbol": str(row.get("symbol", "")),
-                    "direction": str(row.get("direction", "")),
-                    "qty": qty_val,
-                    "entry_price": entry_price_val,
-                    "exit_price": exit_price_val,
-                    "pnl": pnl_val,
-                    "exit_reason": str(row.get("exit_reason", ""))
-                })
-            except Exception as row_err:
-                logger.warning(f"Skipping corrupt trade log row: {row_err}")
-                continue
+        for t in trades:
+            trades_list.append({
+                "timestamp": t.timestamp.strftime("%Y-%m-%d %H:%M:%S") if t.timestamp else "",
+                "symbol": t.symbol,
+                "direction": t.direction,
+                "qty": t.qty,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl": t.pnl,
+                "exit_reason": t.exit_reason
+            })
         return trades_list
     except Exception as e:
-        logger.error(f"Error reading trade log CSV: {e}")
+        logger.error(f"Error querying trades from SQL database: {e}")
         return []
+    finally:
+        db.close()
 
 @app.get("/api/config")
 def get_config():
