@@ -93,6 +93,9 @@ ANGEL_TOTP_SECRET=your_totp_secret_key_here
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_CHAT_ID=your_telegram_chat_id_here
 TRADING_MODE=paper # "paper" (virtual) or "live" (real orders to Angel One)
+
+# Optional database URL (defaults to sqlite:///config/trading_bot.db if omitted)
+DATABASE_URL=sqlite:///config/trading_bot.db
 ```
 
 ### 4. Running the Application
