@@ -10,6 +10,16 @@ import './App.css';
 
 const API_BASE = '/api';
 
+const ALL_INDIAN_STOCKS = [
+  "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN", "BAJFINANCE", "AXISBANK",
+  "KOTAKBANK", "LT", "ITC", "HINDUNILVR", "BHARTIAIRTEL", "M&M", "TATASTEEL", "ADANIENT",
+  "ASIANPAINT", "MARUTI", "TITAN", "SUNPHARMA", "ULTRACEMCO", "HCLTECH", "WIPRO", "ONGC",
+  "JSWSTEEL", "POWERGRID", "NTPC", "COALINDIA", "TATAMOTORS", "ADANIPORTS", "GRASIM",
+  "HINDALCO", "APOLLOHOSP", "DIVISLAB", "CIPLA", "DRREDDY", "BPCL", "HEROMOTOCO",
+  "EICHERMOT", "INDUSINDBK", "BAJAJFINSV", "BRITANNIA", "NESTLEIND", "HDFCLIFE",
+  "SBILIFE", "SHRIRAMFIN", "NIFTY"
+];
+
 const renderDateTime = (dtStr) => {
   if (!dtStr || dtStr === "N/A") return <span>N/A</span>;
   const parts = dtStr.split(" ");
@@ -1975,6 +1985,145 @@ export default function App() {
                     </div>
                   </>
                 )}
+              </div>
+
+              {/* Watchlist & Symbol Selection */}
+              <div className="form-section" style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '25px', marginTop: '10px' }}>
+                <h4 className="form-section-title">Scanner Watchlist (Symbols to Scan)</h4>
+                
+                <p style={{ fontSize: '13px', color: '#8a90a6', margin: 0 }}>
+                  Select which Indian stock symbols the bot will actively scan. Selected symbols are shown in bright teal. Click any symbol to toggle it on/off.
+                </p>
+
+                {/* Add Custom Symbol Input */}
+                <div style={{ display: 'flex', gap: '10px', maxWidth: '400px', marginTop: '5px' }}>
+                  <input 
+                    type="text" 
+                    id="newCustomSymbolInput"
+                    placeholder="Enter custom NSE Symbol (e.g. ZOMATO)"
+                    className="input-control"
+                    style={{ textTransform: 'uppercase', background: '#0d111a', color: '#ffffff', border: '1px solid #1a2035' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const sym = e.target.value.trim().toUpperCase();
+                        if (sym) {
+                          const currentSymbols = config.strategy.symbols || [];
+                          if (!currentSymbols.includes(sym)) {
+                            setConfig({
+                              ...config,
+                              strategy: { ...config.strategy, symbols: [...currentSymbols, sym] }
+                            });
+                          }
+                          e.target.value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <button 
+                    type="button"
+                    className="btn"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', whiteSpace: 'nowrap', padding: '6px 16px', fontSize: '12px' }}
+                    onClick={() => {
+                      const input = document.getElementById('newCustomSymbolInput');
+                      const sym = input.value.trim().toUpperCase();
+                      if (sym) {
+                        const currentSymbols = config.strategy.symbols || [];
+                        if (!currentSymbols.includes(sym)) {
+                          setConfig({
+                            ...config,
+                            strategy: { ...config.strategy, symbols: [...currentSymbols, sym] }
+                          });
+                        }
+                        input.value = '';
+                      }
+                    }}
+                  >
+                    Add Symbol
+                  </button>
+                </div>
+
+                {/* Selected Symbols List (Chips) */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                  {ALL_INDIAN_STOCKS.map(symbol => {
+                    const isSelected = (config.strategy.symbols || []).includes(symbol);
+                    return (
+                      <button
+                        key={symbol}
+                        type="button"
+                        onClick={() => {
+                          const currentSymbols = config.strategy.symbols || [];
+                          let newSymbols;
+                          if (isSelected) {
+                            newSymbols = currentSymbols.filter(s => s !== symbol);
+                          } else {
+                            newSymbols = [...currentSymbols, symbol];
+                          }
+                          setConfig({
+                            ...config,
+                            strategy: { ...config.strategy, symbols: newSymbols }
+                          });
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          border: isSelected ? '1px solid #00e676' : '1px solid rgba(255,255,255,0.08)',
+                          background: isSelected ? 'rgba(0, 230, 118, 0.1)' : 'rgba(255,255,255,0.02)',
+                          color: isSelected ? '#00e676' : '#b0b8cc',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: isSelected ? 600 : 500,
+                          transition: 'all 0.2s',
+                          boxShadow: isSelected ? '0 0 6px rgba(0, 230, 118, 0.15)' : 'none'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) {
+                            e.target.style.background = 'rgba(255,255,255,0.05)';
+                            e.target.style.color = '#ffffff';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) {
+                            e.target.style.background = 'rgba(255,255,255,0.02)';
+                            e.target.style.color = '#b0b8cc';
+                          }
+                        }}
+                      >
+                        {symbol}
+                      </button>
+                    );
+                  })}
+                  
+                  {/* Any custom symbols not in ALL_INDIAN_STOCKS list */}
+                  {(config.strategy.symbols || []).filter(s => !ALL_INDIAN_STOCKS.includes(s)).map(symbol => (
+                    <button
+                      key={symbol}
+                      type="button"
+                      onClick={() => {
+                        const currentSymbols = config.strategy.symbols || [];
+                        const newSymbols = currentSymbols.filter(s => s !== symbol);
+                        setConfig({
+                          ...config,
+                          strategy: { ...config.strategy, symbols: newSymbols }
+                        });
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        border: '1px solid #ffd54f',
+                        background: 'rgba(255, 213, 79, 0.1)',
+                        color: '#ffd54f',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        transition: 'all 0.2s',
+                        boxShadow: '0 0 6px rgba(255, 213, 79, 0.15)'
+                      }}
+                    >
+                      {symbol} &times;
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             </form>
