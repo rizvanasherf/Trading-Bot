@@ -219,6 +219,12 @@ export default function App() {
       const data = await res.json();
       const processedConfig = {
         ...data,
+        risk: {
+          trailing_sl_enabled: false,
+          trailing_sl_trigger_pct: 0.01,
+          trailing_sl_distance_pct: 0.005,
+          ...(data.risk || {})
+        },
         orb: data.orb || { start_time: "09:15", end_time: "09:30", volume_period: 20, volume_multiplier: 1.3, target_multiplier: 1.5, stop_loss_pct: 0.005 },
         vwap_pullback: data.vwap_pullback || { ema_period: 9, volume_period: 20, volume_multiplier: 1.2, stop_loss_pct: 0.005, lookback_swings: 20 },
         cpr_intraday: data.cpr_intraday || { ema_period: 20, volume_period: 20, volume_multiplier: 1.3, narrow_cpr_threshold: 0.05, stop_loss_type: "fixed", stop_loss_pct: 0.005 }
@@ -1938,14 +1944,14 @@ export default function App() {
                 {config.risk.trailing_sl_enabled && (
                   <>
                     <div className="form-group">
-                      <label>TSL Trigger (Profit %): {(config.risk.trailing_sl_trigger_pct * 100).toFixed(2)}%</label>
+                      <label>TSL Trigger (Profit %): {((config.risk.trailing_sl_trigger_pct || 0.01) * 100).toFixed(2)}%</label>
                       <input 
                         type="range"
                         min="0.1"
                         max="5.0"
                         step="0.1"
                         className="range-slider"
-                        value={config.risk.trailing_sl_trigger_pct * 100}
+                        value={(config.risk.trailing_sl_trigger_pct || 0.01) * 100}
                         onChange={(e) => setConfig({
                           ...config,
                           risk: { ...config.risk, trailing_sl_trigger_pct: parseFloat(e.target.value) / 100.0 }
@@ -1953,14 +1959,14 @@ export default function App() {
                       />
                     </div>
                     <div className="form-group">
-                      <label>TSL Distance (Trail %): {(config.risk.trailing_sl_distance_pct * 100).toFixed(2)}%</label>
+                      <label>TSL Distance (Trail %): {((config.risk.trailing_sl_distance_pct || 0.005) * 100).toFixed(2)}%</label>
                       <input 
                         type="range"
                         min="0.05"
                         max="2.5"
                         step="0.05"
                         className="range-slider"
-                        value={config.risk.trailing_sl_distance_pct * 100}
+                        value={(config.risk.trailing_sl_distance_pct || 0.005) * 100}
                         onChange={(e) => setConfig({
                           ...config,
                           risk: { ...config.risk, trailing_sl_distance_pct: parseFloat(e.target.value) / 100.0 }
