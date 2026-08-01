@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # ── Trading mode ──────────────────────────────────────────────────────────
     TRADING_MODE: Literal["paper", "live"] = "paper"
     DATABASE_URL: str = "sqlite:///config/trading_bot.db"
+    
+    # ── Trailing Stop Loss (TSL) ──────────────────────────────────────────────
+    TRAILING_SL_ENABLED: bool = False
+    TRAILING_SL_TRIGGER_PCT: float = 0.01
+    TRAILING_SL_DISTANCE_PCT: float = 0.005
 
     @property
     def angel_configured(self) -> bool:

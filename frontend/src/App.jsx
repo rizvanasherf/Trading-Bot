@@ -77,7 +77,10 @@ export default function App() {
       min_risk_reward: 2.5,
       max_stock_concentration: 0.2,
       market_open: "09:30",
-      squareoff_time: "15:15"
+      squareoff_time: "15:15",
+      trailing_sl_enabled: false,
+      trailing_sl_trigger_pct: 0.01,
+      trailing_sl_distance_pct: 0.005
     },
     strategy: {
       strategy_type: "fibonacci",
@@ -1891,6 +1894,81 @@ export default function App() {
                     })}
                   />
                 </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '15px', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff', display: 'block' }}>Trailing Stop Loss (TSL)</span>
+                      <span style={{ fontSize: '11px', color: '#8a90a6' }}>Lock in profit automatically as the trade moves in your favor</span>
+                    </div>
+                    <label className="switch-container" style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={config.risk.trailing_sl_enabled || false}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          risk: { ...config.risk, trailing_sl_enabled: e.target.checked }
+                        })}
+                        style={{ display: 'none' }}
+                      />
+                      <div style={{
+                        width: '40px',
+                        height: '22px',
+                        borderRadius: '11px',
+                        background: config.risk.trailing_sl_enabled ? '#00e676' : '#2a2d3e',
+                        position: 'relative',
+                        transition: 'background 0.2s',
+                        boxShadow: config.risk.trailing_sl_enabled ? '0 0 8px rgba(0, 230, 118, 0.4)' : 'none'
+                      }}>
+                        <div style={{
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: '#ffffff',
+                          position: 'absolute',
+                          top: '2px',
+                          left: config.risk.trailing_sl_enabled ? '20px' : '2px',
+                          transition: 'left 0.2s'
+                        }} />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {config.risk.trailing_sl_enabled && (
+                  <>
+                    <div className="form-group">
+                      <label>TSL Trigger (Profit %): {(config.risk.trailing_sl_trigger_pct * 100).toFixed(2)}%</label>
+                      <input 
+                        type="range"
+                        min="0.1"
+                        max="5.0"
+                        step="0.1"
+                        className="range-slider"
+                        value={config.risk.trailing_sl_trigger_pct * 100}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          risk: { ...config.risk, trailing_sl_trigger_pct: parseFloat(e.target.value) / 100.0 }
+                        })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>TSL Distance (Trail %): {(config.risk.trailing_sl_distance_pct * 100).toFixed(2)}%</label>
+                      <input 
+                        type="range"
+                        min="0.05"
+                        max="2.5"
+                        step="0.05"
+                        className="range-slider"
+                        value={config.risk.trailing_sl_distance_pct * 100}
+                        onChange={(e) => setConfig({
+                          ...config,
+                          risk: { ...config.risk, trailing_sl_distance_pct: parseFloat(e.target.value) / 100.0 }
+                        })}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             </form>

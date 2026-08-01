@@ -99,7 +99,8 @@ def init_trading_components():
     # Force clear env-file keys from os.environ to bypass Docker's OS-level environment cache.
     env_keys = [
         "ANGEL_API_KEY", "ANGEL_CLIENT_ID", "ANGEL_PIN", "ANGEL_TOTP_SECRET",
-        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRADING_MODE", "DATABASE_URL"
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRADING_MODE", "DATABASE_URL",
+        "TRAILING_SL_ENABLED", "TRAILING_SL_TRIGGER_PCT", "TRAILING_SL_DISTANCE_PCT"
     ]
     import os
     for key in env_keys:
@@ -149,7 +150,7 @@ def init_trading_components():
     )
     
     risk_manager = RiskManager(global_config, capital=capital_val)
-    order_executor = OrderExecutor()
+    order_executor = OrderExecutor(config=global_config)
     logger.info("Core trading components initialized successfully.")
 
 # Initial core setup

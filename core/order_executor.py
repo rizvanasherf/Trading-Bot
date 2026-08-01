@@ -37,17 +37,32 @@ class Position:
     entry_time: datetime = field(default_factory=now_ist)
     status: str = "PENDING_FILL"   # PENDING_FILL | OPEN | FAILED | CLOSED_SL | CLOSED_TARGET | CLOSED_SQUAREOFF
     entry_order_id: Optional[str] = None
+    sl_order_id: Optional[str] = None
+    high_watermark: float = 0.0
+    low_watermark: float = 0.0
 
     def update_pnl(self, ltp: float) -> None:
         self.ltp = ltp
+        
+        # Initialize watermarks if not set yet
+        if self.high_watermark == 0.0:
+            self.high_watermark = self.entry_price or ltp
+        if self.low_watermark == 0.0:
+            self.low_watermark = self.entry_price or ltp
+            
+        # Update watermarks based on current price
+        self.high_watermark = max(self.high_watermark, ltp)
+        self.low_watermark = min(self.low_watermark, ltp)
+        
         multiplier = 1 if self.direction == Direction.LONG else -1
         self.pnl = round((ltp - self.entry_price) * self.qty * multiplier, 2)
 
 
 class OrderExecutor:
-    def __init__(self, smart=None):
+    def __init__(self, smart=None, config: Optional[dict] = None):
         self._positions: Dict[str, Position] = {}
         self._trade_log: List[dict] = []
+        self.config = config or {}
 
     def _place_order_live(self, params: dict) -> dict:
         broker_limiters.get("orders").acquire("Place Order Live API")
@@ -246,9 +261,38 @@ class OrderExecutor:
                 "price": limit_price,
                 "quantity": pos.qty
             }
-            self._place_order_live(params)
+            res = self._place_order_live(params)
+            if res and res.get("status") is True:
+                pos.sl_order_id = res.get("data", {}).get("orderid")
+                logger.info(f"[{pos.symbol}] Successfully placed live Stoploss order. ID: {pos.sl_order_id}")
         except Exception as exc:
             logger.error(f"[{pos.symbol}] SL order placement failed: {exc}")
+
+    def _modify_sl_order_live(self, pos: Position, new_trigger_price: float, new_limit_price: float) -> None:
+        if not (settings.is_live and connector.smart is not None and pos.sl_order_id):
+            return
+        try:
+            token, trading_symbol = connector.get_token_info(pos.symbol)
+            transaction = "SELL" if pos.direction == Direction.LONG else "BUY"
+            logger.info(f"[TSL] [{pos.symbol}] Modifying live stop loss order {pos.sl_order_id} to trigger: ₹{new_trigger_price}, price: ₹{new_limit_price}")
+            
+            broker_limiters.get("orders").acquire("Modify Order Live API")
+            connector.smart.modifyOrder({
+                "variety": "STOPLOSS",
+                "orderid": pos.sl_order_id,
+                "tradingsymbol": trading_symbol,
+                "symboltoken": token,
+                "transactiontype": transaction,
+                "exchange": connector.get_exchange(trading_symbol),
+                "ordertype": "STOPLOSS_LIMIT",
+                "producttype": "INTRADAY",
+                "duration": "DAY",
+                "triggerprice": round(new_trigger_price, 2),
+                "price": round(new_limit_price, 2),
+                "quantity": pos.qty
+            })
+        except Exception as exc:
+            logger.error(f"[TSL] [{pos.symbol}] Live SL order modification failed: {exc}")
 
     def _place_target_order_for_pos(self, pos: Position, token: str, trading_symbol: str) -> None:
         if not (settings.is_live and connector.smart is not None):
@@ -364,6 +408,37 @@ class OrderExecutor:
                 continue
 
             pos.update_pnl(ltp)
+            
+            # Trailing Stop Loss (TSL) update
+            risk_cfg = self.config.get("risk", {}) if self.config else {}
+            tsl_enabled = risk_cfg.get("trailing_sl_enabled", False) or getattr(settings, "TRAILING_SL_ENABLED", False)
+            
+            if tsl_enabled:
+                trigger_pct = risk_cfg.get("trailing_sl_trigger_pct", 0.01)
+                distance_pct = risk_cfg.get("trailing_sl_distance_pct", 0.005)
+                
+                if pos.direction == Direction.LONG:
+                    trigger_val = pos.entry_price * (1 + trigger_pct)
+                    if pos.high_watermark >= trigger_val:
+                        new_sl = round(pos.high_watermark * (1 - distance_pct), 2)
+                        if new_sl > pos.stop_loss:
+                            logger.info(f"[TSL] [{pos.symbol}] Trailing SL moved UP from ₹{pos.stop_loss} to ₹{new_sl} (High seen: ₹{pos.high_watermark})")
+                            pos.stop_loss = new_sl
+                            # If live, update the order at the broker
+                            if pos.sl_order_id:
+                                limit_price = round(new_sl * 0.999, 2)
+                                self._modify_sl_order_live(pos, new_sl, limit_price)
+                else: # SHORT
+                    trigger_val = pos.entry_price * (1 - trigger_pct)
+                    if pos.low_watermark <= trigger_val:
+                        new_sl = round(pos.low_watermark * (1 + distance_pct), 2)
+                        if new_sl < pos.stop_loss:
+                            logger.info(f"[TSL] [{pos.symbol}] Trailing SL moved DOWN from ₹{pos.stop_loss} to ₹{new_sl} (Low seen: ₹{pos.low_watermark})")
+                            pos.stop_loss = new_sl
+                            # If live, update the order at the broker
+                            if pos.sl_order_id:
+                                limit_price = round(new_sl * 1.001, 2)
+                                self._modify_sl_order_live(pos, new_sl, limit_price)
 
             if squareoff:
                 pos.status = "CLOSED_SQUAREOFF"
