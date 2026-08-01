@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import FibonacciChart from './components/FibonacciChart';
 import AnalysisDashboard from './components/AnalysisDashboard';
+import Logo from './components/Logo';
 import './App.css';
 
 const API_BASE = '/api';
@@ -512,9 +513,8 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar Navigation */}
       <aside className="sidebar">
-        <div className="logo-section">
-          <TrendingUp className="logo-icon" />
-          <span className="logo-text">FIB TRADER</span>
+        <div className="logo-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <Logo />
         </div>
         
         <nav className="nav-links">
