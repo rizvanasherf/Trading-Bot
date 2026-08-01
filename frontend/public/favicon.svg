@@ -17,7 +17,7 @@
   />
   
   <!-- Glowing Candlestick Bars (Slanted along the right wing) -->
-  <rect x="33" y="8" width="2.5" height="12" rx="1" fill="#00e676" transform="skewX(-15)" />
-  <rect x="37" y="6" width="2.5" height="16" rx="1" fill="#00e676" transform="skewX(-15)" />
-  <rect x="41" y="11" width="2.5" height="9" rx="1" fill="#00e676" transform="skewX(-15)" />
+  <rect x="33" y="8" width="2.5" height="12" rx="1" fill="#00d2ff" transform="skewX(-15)" />
+  <rect x="37" y="6" width="2.5" height="16" rx="1" fill="#00d2ff" transform="skewX(-15)" />
+  <rect x="41" y="11" width="2.5" height="9" rx="1" fill="#00d2ff" transform="skewX(-15)" />
 </svg>

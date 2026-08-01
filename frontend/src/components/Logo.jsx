@@ -27,9 +27,9 @@ export default function Logo({ width = 180, height = 36 }) {
         />
         
         {/* Glowing Candlestick Bars (Slanted along the right wing) */}
-        <rect x="29" y="4" width="2.5" height="12" rx="1" fill="#00e676" transform="skewX(-15)" />
-        <rect x="33" y="2" width="2.5" height="16" rx="1" fill="#00e676" transform="skewX(-15)" />
-        <rect x="37" y="7" width="2.5" height="9" rx="1" fill="#00e676" transform="skewX(-15)" />
+        <rect x="29" y="4" width="2.5" height="12" rx="1" fill="#00d2ff" transform="skewX(-15)" />
+        <rect x="33" y="2" width="2.5" height="16" rx="1" fill="#00d2ff" transform="skewX(-15)" />
+        <rect x="37" y="7" width="2.5" height="9" rx="1" fill="#00d2ff" transform="skewX(-15)" />
       </g>
       
       {/* Brand Name Text */}
@@ -42,7 +42,7 @@ export default function Logo({ width = 180, height = 36 }) {
         fill="#ffffff" 
         letterSpacing="0.5px"
       >
-        FIB <tspan fontWeight="400" fill="#e2e8f0">Trader</tspan> <tspan fontWeight="800" fill="#00e676">AI</tspan>
+        FIB <tspan fontWeight="400" fill="#e2e8f0">Trader</tspan> <tspan fontWeight="800" fill="#00d2ff">AI</tspan>
       </text>
     </svg>
   );
