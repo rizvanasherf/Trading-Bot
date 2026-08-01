@@ -2019,9 +2019,8 @@ export default function App() {
                   value={selectedPeriod}
                   onChange={(e) => {
                     setSelectedPeriod(e.target.value);
-                    setTimeout(fetchTrades, 50);
                   }}
-                  style={{ padding: '6px 12px', minWidth: '180px' }}
+                  style={{ padding: '6px 12px', minWidth: '180px', background: '#0d111a', color: '#ffffff', border: '1px solid #1a2035' }}
                 >
                   <option>Today's Trades</option>
                   <option>Yesterday's Trades</option>
@@ -2088,7 +2087,7 @@ export default function App() {
                   className="input-control" 
                   value={filterDirection}
                   onChange={(e) => setFilterDirection(e.target.value)}
-                  style={{ minWidth: '120px', background: '#0d111a', border: '1px solid #1a2035' }}
+                  style={{ minWidth: '120px', background: '#0d111a', color: '#ffffff', border: '1px solid #1a2035' }}
                 >
                   <option value="ALL">All</option>
                   <option value="LONG">Long</option>
@@ -2101,7 +2100,7 @@ export default function App() {
                   className="input-control" 
                   value={filterReason}
                   onChange={(e) => setFilterReason(e.target.value)}
-                  style={{ minWidth: '150px', background: '#0d111a', border: '1px solid #1a2035' }}
+                  style={{ minWidth: '150px', background: '#0d111a', color: '#ffffff', border: '1px solid #1a2035' }}
                 >
                   <option value="ALL">All Reasons</option>
                   <option value="CLOSED_SL">Stop Loss (SL)</option>

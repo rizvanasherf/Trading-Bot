@@ -21,7 +21,7 @@ def test_to_yfinance_symbol_translation(data_fetcher):
             "Low": [99.0],
             "Close": [100.0],
             "Volume": [1000]
-        }, index=[pd.Timestamp("2026-07-14 09:15:00")])
+        }, index=[pd.Timestamp.now()])
         mock_download.return_value = mock_df
         
         # Test Nifty Spot translation
@@ -35,13 +35,15 @@ def test_to_yfinance_symbol_translation(data_fetcher):
 def test_yfinance_dataframe_cleaning(data_fetcher):
     with patch("yfinance.download") as mock_download:
         # Create a sample raw yfinance dataframe
+        t1 = pd.Timestamp.now() - pd.Timedelta(minutes=10)
+        t2 = pd.Timestamp.now() - pd.Timedelta(minutes=5)
         raw_df = pd.DataFrame({
             "Open": [10.0, 11.0],
             "High": [12.0, 13.0],
             "Low": [9.0, 8.0],
             "Close": [11.0, 12.0],
             "Volume": [1000, 2000]
-        }, index=[pd.Timestamp("2026-07-14 09:15:00"), pd.Timestamp("2026-07-14 09:20:00")])
+        }, index=[t1, t2])
         mock_download.return_value = raw_df
         
         df_clean = data_fetcher.get_historical_data_yfinance("TCS", interval="5minute", days=15)

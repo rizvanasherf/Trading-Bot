@@ -44,6 +44,7 @@ export default function AnalysisDashboard({ apiBase }) {
   const [hoveredBarIndex, setHoveredBarIndex] = useState(null);
   const [hoveredLineIndex, setHoveredLineIndex] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
   
   const [viewMode, setViewMode] = useState('monthly'); // monthly | performance
   const [performance, setPerformance] = useState({
@@ -230,10 +231,23 @@ export default function AnalysisDashboard({ apiBase }) {
     "July", "August", "September", "October", "November", "December"
   ];
 
+  const handlePrevMonth = () => {
+    setCurrentCalendarDate(prev => {
+      const d = new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      return d;
+    });
+  };
+
+  const handleNextMonth = () => {
+    setCurrentCalendarDate(prev => {
+      const d = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+      return d;
+    });
+  };
+
   const renderCalendar = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
+    const year = currentCalendarDate.getFullYear();
+    const month = currentCalendarDate.getMonth();
     const totalDays = new Date(year, month + 1, 0).getDate();
     const firstDayIndex = new Date(year, month, 1).getDay();
 
@@ -1239,10 +1253,58 @@ export default function AnalysisDashboard({ apiBase }) {
 
             {/* Daily Performance Calendar */}
             <div className="chart-card">
-              <h2 className="chart-title">
-                <Calendar size={18} style={{ color: '#ffd54f' }} />
-                Daily Returns Calendar ({calendarData.monthName} {calendarData.year})
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
+                <h2 className="chart-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={18} style={{ color: '#ffd54f' }} />
+                  Daily Returns Calendar ({calendarData.monthName} {calendarData.year})
+                </h2>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button 
+                    onClick={handlePrevMonth} 
+                    style={{ 
+                      background: 'rgba(255,255,255,0.05)', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      color: '#ffffff', 
+                      borderRadius: '6px', 
+                      padding: '4px 10px', 
+                      cursor: 'pointer', 
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.05)'}
+                    title="Previous Month"
+                  >
+                    &larr;
+                  </button>
+                  <button 
+                    onClick={handleNextMonth} 
+                    style={{ 
+                      background: 'rgba(255,255,255,0.05)', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      color: '#ffffff', 
+                      borderRadius: '6px', 
+                      padding: '4px 10px', 
+                      cursor: 'pointer', 
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.05)'}
+                    title="Next Month"
+                  >
+                    &rarr;
+                  </button>
+                </div>
+              </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', marginTop: '10px' }}>
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (

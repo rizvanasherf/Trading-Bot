@@ -691,16 +691,25 @@ def get_trades(period: str = "Today's Trades"):
         
         trades_list = []
         for _, row in df_filtered.iterrows():
-            trades_list.append({
-                "timestamp": row["timestamp"],
-                "symbol": row["symbol"],
-                "direction": row["direction"],
-                "qty": int(row["qty"]),
-                "entry_price": float(row["entry_price"]),
-                "exit_price": float(row["exit_price"]),
-                "pnl": float(row["pnl"]),
-                "exit_reason": row["exit_reason"]
-            })
+            try:
+                qty_val = int(row["qty"]) if pd.notna(row.get("qty")) else 0
+                entry_price_val = float(row["entry_price"]) if pd.notna(row.get("entry_price")) else 0.0
+                exit_price_val = float(row["exit_price"]) if pd.notna(row.get("exit_price")) else 0.0
+                pnl_val = float(row["pnl"]) if pd.notna(row.get("pnl")) else 0.0
+                
+                trades_list.append({
+                    "timestamp": str(row.get("timestamp", "")),
+                    "symbol": str(row.get("symbol", "")),
+                    "direction": str(row.get("direction", "")),
+                    "qty": qty_val,
+                    "entry_price": entry_price_val,
+                    "exit_price": exit_price_val,
+                    "pnl": pnl_val,
+                    "exit_reason": str(row.get("exit_reason", ""))
+                })
+            except Exception as row_err:
+                logger.warning(f"Skipping corrupt trade log row: {row_err}")
+                continue
         return trades_list
     except Exception as e:
         logger.error(f"Error reading trade log CSV: {e}")
