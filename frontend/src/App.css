@@ -509,9 +509,20 @@ input[type="range"], input[type="checkbox"] {
   gap: 24px;
 }
 
+/* Settings row layout */
+.settings-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+  align-items: stretch; /* equal height */
+}
+
 @media (max-width: 900px) {
   .backtest-layout {
     grid-template-columns: 1fr;
+  }
+  .settings-row-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 

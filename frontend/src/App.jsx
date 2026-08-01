@@ -1228,22 +1228,24 @@ export default function App() {
         {/* TAB 3: Strategy Settings */}
         {activeTab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-            <form className="card-panel" onSubmit={saveConfig}>
-            <div className="panel-header">
-              <h3 className="panel-title">
-                <Settings size={18} style={{ color: '#2979ff' }} />
-                Strategy & Risk Configurations
-              </h3>
-              <button type="submit" className="btn btn-primary">
-                <Save size={16} />
-                Save Settings
-              </button>
-            </div>
-            
-            <div className="form-grid">
-              {/* Strategy Parameters */}
-              <div className="form-section">
-                <h4 className="form-section-title">Strategy Settings</h4>
+            <form onSubmit={saveConfig}>
+              {/* Unified Header */}
+              <div className="card-panel" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Settings size={20} style={{ color: '#2979ff' }} />
+                  <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#ffffff' }}>Strategy & Risk Control Center</h3>
+                </div>
+                <button type="submit" className="btn btn-primary">
+                  <Save size={16} />
+                  Save Settings
+                </button>
+              </div>
+
+              {/* Row 1: Strategy and Risk side-by-side equal height */}
+              <div className="settings-row-grid" style={{ marginBottom: '24px' }}>
+                {/* Left Card: Strategy Parameters */}
+                <div className="card-panel" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h4 className="form-section-title" style={{ marginBottom: '8px' }}>Active Strategy Settings</h4>
 
                 <div className="form-group">
                   <label>Active Trading Strategy</label>
@@ -1791,11 +1793,11 @@ export default function App() {
                     </div>
                   </>
                 )}
-              </div>
-              
-              {/* Risk Settings */}
-              <div className="form-section">
-                <h4 className="form-section-title">Risk & Capital Settings</h4>
+                </div>
+
+                {/* Right Card: Risk & Capital + TSL Settings */}
+                <div className="card-panel" style={{ height: '100%', margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <h4 className="form-section-title" style={{ marginBottom: '8px' }}>Risk & Capital Safeguards</h4>
                 
                 <div className="form-group">
                   <label>Account Sizing Capital (₹)</label>
@@ -1985,11 +1987,15 @@ export default function App() {
                     </div>
                   </>
                 )}
+                </div>
               </div>
 
-              {/* Watchlist & Symbol Selection */}
-              <div className="form-section" style={{ gridColumn: '1 / -1', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '25px', marginTop: '10px' }}>
-                <h4 className="form-section-title">Scanner Watchlist (Symbols to Scan)</h4>
+              {/* Row 2: Watchlist */}
+              <div className="card-panel" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Activity size={18} style={{ color: '#00e676' }} />
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#ffffff' }}>Scanner Watchlist (Symbols to Scan)</h4>
+                </div>
                 
                 <p style={{ fontSize: '13px', color: '#8a90a6', margin: 0 }}>
                   Select which Indian stock symbols the bot will actively scan. Selected symbols are shown in bright teal. Click any symbol to toggle it on/off.
@@ -2125,7 +2131,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-            </div>
             </form>
 
             <div className="card-panel">
