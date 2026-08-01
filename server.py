@@ -57,7 +57,29 @@ risk_manager: Optional[RiskManager] = None
 order_executor: Optional[OrderExecutor] = None
 
 # Scanner control variables
-scanning_active = False
+def load_scanner_state() -> bool:
+    import json
+    try:
+        state_file = Path("config/scanner_state.json")
+        if state_file.exists():
+            with open(state_file, "r") as f:
+                data = json.load(f)
+                return bool(data.get("scanning_active", False))
+    except Exception as e:
+        logger.error(f"Error loading scanner state: {e}")
+    return False
+
+def save_scanner_state(active: bool):
+    import json
+    try:
+        state_file = Path("config/scanner_state.json")
+        state_file.parent.mkdir(exist_ok=True, parents=True)
+        with open(state_file, "w") as f:
+            json.dump({"scanning_active": active}, f)
+    except Exception as e:
+        logger.error(f"Error saving scanner state: {e}")
+
+scanning_active = load_scanner_state()
 scanner_thread: Optional[threading.Thread] = None
 scanner_stop_event = threading.Event()
 latest_cpr_data = None
@@ -352,6 +374,7 @@ def start_scanner():
         if not allowed:
             raise HTTPException(status_code=400, detail=f"Cannot start scanner: {reason}")
         scanning_active = True
+        save_scanner_state(True)
         logger.info("Live Scanning activated via API.")
     return {"message": "Scanner started successfully."}
 
@@ -360,6 +383,7 @@ def stop_scanner():
     global scanning_active
     if scanning_active:
         scanning_active = False
+        save_scanner_state(False)
         logger.info("Live Scanning deactivated via API.")
     return {"message": "Scanner stopped successfully."}
 
@@ -367,6 +391,7 @@ def stop_scanner():
 def toggle_trading_mode():
     global scanning_active
     scanning_active = False  # Deactivate scanning when swapping modes
+    save_scanner_state(False)
     
     new_mode = "paper" if settings.is_live else "live"
     settings.TRADING_MODE = new_mode
