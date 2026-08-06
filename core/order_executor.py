@@ -294,6 +294,23 @@ class OrderExecutor:
         except Exception as exc:
             logger.error(f"[TSL] [{pos.symbol}] Live SL order modification failed: {exc}")
 
+    def _cancel_pending_orders_for_symbol(self, symbol: str) -> None:
+        if not (settings.is_live and connector.smart is not None):
+            return
+        try:
+            book_res = self._get_order_book_live()
+            if book_res and book_res.get("status") is True and "data" in book_res:
+                token, trading_symbol = connector.get_token_info(symbol)
+                for order in book_res["data"]:
+                    if order.get("tradingsymbol") == trading_symbol or order.get("symboltoken") == token:
+                        if order.get("status") in ["open", "validation pending", "trigger pending"]:
+                            order_id = order.get("orderid")
+                            variety = order.get("variety", "NORMAL")
+                            logger.warning(f"[{symbol}] Cancelling active order {order_id} ({variety}) prior to squareoff.")
+                            self._cancel_order_live(variety=variety, order_id=order_id)
+        except Exception as exc:
+            logger.error(f"[{symbol}] Error cancelling pending orders: {exc}")
+
     def _place_target_order_for_pos(self, pos: Position, token: str, trading_symbol: str) -> None:
         if not (settings.is_live and connector.smart is not None):
             return
@@ -357,7 +374,7 @@ class OrderExecutor:
         Returns list of closed-trade dicts for RiskManager.
         """
         closed: List[dict] = []
-        squareoff = is_after_squareoff()
+        squareoff = is_after_squareoff("15:15")
 
         for pos_id, pos in list(self._positions.items()):
             # Handle PENDING_FILL state: check if live entry order is completed/rejected/cancelled
@@ -441,8 +458,38 @@ class OrderExecutor:
                                 self._modify_sl_order_live(pos, new_sl, limit_price)
 
             if squareoff:
+                # Cancel pending orders for this symbol first
+                self._cancel_pending_orders_for_symbol(pos.symbol)
+                
+                # Execute live exit order if live trading is enabled
+                if settings.is_live and connector.smart is not None:
+                    try:
+                        token, trading_symbol = connector.get_token_info(pos.symbol)
+                        transaction = "SELL" if pos.direction == Direction.LONG else "BUY"
+                        if pos.direction == Direction.LONG:
+                            limit_price = round(ltp * 0.999, 2)
+                        else:
+                            limit_price = round(ltp * 1.001, 2)
+                            
+                        logger.warning(f"[{pos.symbol}] Placing live auto-squareoff order: {transaction} {pos.qty} @ ₹{limit_price}")
+                        params = {
+                            "variety": "NORMAL",
+                            "tradingsymbol": trading_symbol,
+                            "symboltoken": token,
+                            "transactiontype": transaction,
+                            "exchange": connector.get_exchange(trading_symbol),
+                            "ordertype": "LIMIT",
+                            "producttype": "INTRADAY",
+                            "duration": "DAY",
+                            "price": limit_price,
+                            "quantity": pos.qty
+                        }
+                        self._place_order_live(params)
+                    except Exception as exc:
+                        logger.error(f"[{pos.symbol}] Live auto-squareoff order failed: {exc}")
+
                 pos.status = "CLOSED_SQUAREOFF"
-                logger.warning(f"[{pos.symbol}] Auto-squareoff at 3:15 PM. PnL ₹{pos.pnl:+,.2f}")
+                logger.warning(f"[{pos.symbol}] Auto-squareoff at 15:15 PM. PnL ₹{pos.pnl:+,.2f}")
                 self._log_closed_trade(pos, ltp)
                 closed.append({"symbol": pos.symbol, "pnl": pos.pnl, "qty": pos.qty, "exit_price": ltp})
                 continue
@@ -577,6 +624,10 @@ class OrderExecutor:
     @property
     def open_positions(self) -> List[Position]:
         return [p for p in self._positions.values() if p.status == "OPEN"]
+
+    @property
+    def active_positions(self) -> List[Position]:
+        return [p for p in self._positions.values() if p.status in ("OPEN", "PENDING_FILL")]
 
     @property
     def all_positions(self) -> List[Position]:

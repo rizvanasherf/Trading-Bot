@@ -4,6 +4,7 @@ tests/test_trailing_sl.py
 Unit tests verifying the Automated Trailing Stop Loss (TSL) logic for Long and Short trades.
 """
 import pytest
+from unittest.mock import patch
 from core.order_executor import OrderExecutor, Position
 from core.strategy import Direction
 
@@ -18,7 +19,9 @@ def mock_config():
         }
     }
 
-def test_trailing_sl_long(mock_config):
+@patch("core.order_executor.is_after_squareoff")
+def test_trailing_sl_long(mock_sq, mock_config):
+    mock_sq.return_value = False
     executor = OrderExecutor(config=mock_config)
     
     # Create long position entered at 100
@@ -56,7 +59,9 @@ def test_trailing_sl_long(mock_config):
     assert pos.high_watermark == 104.0
     assert pos.stop_loss == 103.48
 
-def test_trailing_sl_short(mock_config):
+@patch("core.order_executor.is_after_squareoff")
+def test_trailing_sl_short(mock_sq, mock_config):
+    mock_sq.return_value = False
     executor = OrderExecutor(config=mock_config)
     
     # Create short position entered at 100

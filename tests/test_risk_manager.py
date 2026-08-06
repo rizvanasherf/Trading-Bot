@@ -54,7 +54,15 @@ def test_calculate_position_size(risk_config):
     assert qty == 200
 
 
-def test_can_trade_circuit_breakers(risk_config):
+from unittest.mock import patch
+import datetime
+import pytz
+
+@patch("core.risk_manager.now_ist")
+def test_can_trade_circuit_breakers(mock_now, risk_config):
+    # Mock time to a Monday at 10:00 AM IST
+    mock_now.return_value = datetime.datetime(2026, 8, 3, 10, 0, 0, tzinfo=pytz.timezone("Asia/Kolkata"))
+    
     rm = RiskManager(risk_config)
     
     # Initially OK

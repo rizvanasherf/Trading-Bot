@@ -43,6 +43,7 @@ class RiskManager:
         self.max_daily_trades: int = risk.get("max_daily_trades", 10)
         self.min_risk_reward: float = risk.get("min_risk_reward", 2.0)
         self.max_stock_concentration: float = risk.get("max_stock_concentration", 0.20)
+        self.market_open: str = risk.get("market_open", "09:30")
 
         self.stats = DailyStats()
         self._position_exposure: Dict[str, float] = {}  # symbol → INR value
@@ -118,14 +119,39 @@ class RiskManager:
         Pass *symbol* to additionally check concentration.
         """
         self.reset_daily_counters()
+        
+        # 1. Enforce Weekday only trading
+        from datetime import time
+        now = now_ist()
+        if now.weekday() >= 5:
+            return False, "Trading suspended on weekends"
+            
+        # 2. Enforce Trading Entry Time Window: market_open (default 09:30) to 15:00 (3:00 PM)
+        now_t = now.time()
+        try:
+            h_open, m_open = map(int, self.market_open.split(":"))
+            open_time = time(h_open, m_open)
+        except Exception:
+            open_time = time(9, 30)
+            
+        # Hard constraint: no new entries after 3:00 PM (15:00)
+        close_time = time(15, 0)
+        
+        if now_t < open_time:
+            return False, f"Market not open for trading yet (current: {now_t.strftime('%H:%M')} < open: {self.market_open})"
+        if now_t >= close_time:
+            return False, f"Market closed for new entries (current: {now_t.strftime('%H:%M')} >= cutoff: 15:00)"
 
+        # 3. Daily Loss circuit breaker
         daily_loss_limit = self.capital * self.max_daily_loss
         if self.stats.gross_pnl <= -daily_loss_limit:
             return False, f"Daily loss limit hit (₹{-self.stats.gross_pnl:,.0f} ≥ ₹{daily_loss_limit:,.0f})"
 
+        # 4. Consecutive Loss circuit breaker
         if self.stats.consecutive_losses >= self.max_consecutive_losses:
             return False, f"Consecutive loss circuit breaker ({self.stats.consecutive_losses} losses)"
 
+        # 5. Daily Trade Limit
         total_trades_initiated = self.stats.trades + active_positions_count
         if total_trades_initiated >= self.max_daily_trades:
             return False, f"Max daily trades reached ({self.max_daily_trades})"

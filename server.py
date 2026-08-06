@@ -243,7 +243,7 @@ def run_scanning_loop():
             risk_manager.reset_daily_counters()
             
             # 2. Check daily circuit breakers
-            allowed, reason = risk_manager.can_trade(active_positions_count=len(order_executor.open_positions))
+            allowed, reason = risk_manager.can_trade(active_positions_count=len(order_executor.active_positions))
             
             ltps = {}
             fetch_results = []
@@ -289,7 +289,7 @@ def run_scanning_loop():
                     
                     try:
                         # Check circuit breakers for specific stock
-                        can_tr, _ = risk_manager.can_trade(sym, active_positions_count=len(order_executor.open_positions))
+                        can_tr, _ = risk_manager.can_trade(sym, active_positions_count=len(order_executor.active_positions))
                         if not can_tr:
                             continue
                             
@@ -440,7 +440,7 @@ def start_scanner():
     global scanning_active
     if not scanning_active:
         # Check daily breakers before starting
-        allowed, reason = risk_manager.can_trade(active_positions_count=len(order_executor.open_positions))
+        allowed, reason = risk_manager.can_trade(active_positions_count=len(order_executor.active_positions))
         if not allowed:
             raise HTTPException(status_code=400, detail=f"Cannot start scanner: {reason}")
         scanning_active = True

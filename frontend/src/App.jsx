@@ -242,7 +242,7 @@ export default function App() {
       };
       setConfig(processedConfig);
       if (data.strategy?.strategy_type === 'cpr_intraday') {
-        if (chartSymbol !== 'NIFTY') {
+        if (!chartSymbol) {
           setChartSymbol('NIFTY');
         }
       } else if (data.strategy?.symbols?.length > 0 && !chartSymbol) {
