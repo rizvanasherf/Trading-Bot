@@ -272,6 +272,8 @@ def run_scanning_loop():
                     sym, tf, strat_inst = task
                     try:
                         ltp = data_fetcher.get_ltp(sym)
+                        # Stagger calls to avoid breaching the Angel One 3 requests/sec rate limit
+                        time.sleep(0.35)
                         df_hist = data_fetcher.get_historical_data(sym, interval=tf, days=5)
                         return sym, ltp, df_hist, strat_inst
                     except Exception as e:
@@ -384,7 +386,7 @@ def run_scanning_loop():
             logger.error(f"Background scanner exception: {exc}")
             
         # Wait 10 seconds before next scan cycle
-        scanner_stop_event.wait(timeout=10.0)
+        scanner_stop_event.wait(timeout=15.0)
 
 # Start background thread automatically
 scanner_thread = threading.Thread(target=run_scanning_loop, daemon=True)
