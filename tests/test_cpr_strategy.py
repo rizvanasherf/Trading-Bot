@@ -102,3 +102,54 @@ def test_cpr_strategy_signals_wait(cpr_config, monkeypatch):
     # Should not produce signals under flat sideways conditions
     signals = strat.generate_signals("NIFTY", df_intraday)
     assert len(signals) == 0
+
+def test_cpr_strategy_triggers_bullish_and_bearish(cpr_config):
+    # Setup mock data fetcher
+    mock_fetcher = MagicMock()
+    
+    # Previous day OHLC: High = 100, Low = 98, Close = 99
+    # Pivot = 99, BC = 99, TC = 99 -> CPR range: [99, 99]
+    df_daily = pd.DataFrame({
+        "open": [99.0],
+        "high": [100.0],
+        "low": [98.0],
+        "close": [99.0],
+        "volume": [1000]
+    }, index=[datetime(2026, 8, 3)])
+    
+    mock_fetcher.get_historical_data_yfinance.return_value = df_daily
+    
+    strat = CPRIntradayStrategy(cpr_config)
+    strat.data_fetcher = mock_fetcher
+    
+    # Generate 35 warmup candles on the previous day (August 3rd)
+    warmup_times = [datetime(2026, 8, 3, 15, 30) - timedelta(minutes=5 * (35 - i)) for i in range(35)]
+    df_warmup = pd.DataFrame({
+        "open": [98.0] * 35,
+        "high": [98.5] * 35,
+        "low": [97.5] * 35,
+        "close": [98.0] * 35,
+        "volume": [100.0] * 35
+    }, index=warmup_times)
+    
+    # 5 intraday candles today starting at 9:15 AM
+    times = [
+        datetime(2026, 8, 4, 9, 15), # 5m candle 1
+        datetime(2026, 8, 4, 9, 20), # 5m candle 2
+        datetime(2026, 8, 4, 9, 25), # 5m candle 3: closes at 100.1 above cpr_max = 99 (establishes Bullish Bias)
+        datetime(2026, 8, 4, 9, 30), # 4th candle: flat/setup
+        datetime(2026, 8, 4, 9, 35)  # 5th candle: closes at 101.2 above EMA20 and breaks prev high (100.0)
+    ]
+    df_today = pd.DataFrame({
+        "open":  [98.0, 99.0, 99.5, 99.6, 99.8],
+        "high":  [99.2, 99.6, 100.2, 100.0, 101.5],
+        "low":   [97.8, 98.8, 99.4, 99.5, 99.7],
+        "close": [99.0, 99.5, 100.1, 99.7, 101.2],
+        "volume": [100.0] * 5
+    }, index=times)
+    
+    df_bullish = pd.concat([df_warmup, df_today])
+    signals = strat.generate_signals("NIFTY", df_bullish)
+    assert len(signals) == 1
+    assert signals[0].direction == Direction.LONG
+    assert signals[0].entry_price == 101.2

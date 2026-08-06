@@ -100,112 +100,60 @@ class CPRIntradayStrategy:
         cpr_min = min(tc, bc)
         cpr_max = max(tc, bc)
         
-        # CPR width in percent
-        cpr_width = (abs(tc - bc) / pivot) * 100
-        is_narrow = cpr_width <= self.narrow_cpr_threshold
-        is_wide = cpr_width >= self.wide_cpr_threshold
-        
-        # Calculate indicators
+        # Calculate EMA 20
         df = df.copy()
-        df["vwap"] = self._calculate_vwap(df)
         df["ema"] = df["close"].ewm(span=self.ema_period, adjust=False).mean()
-        df["vol_ma"] = df["volume"].rolling(window=self.volume_period).mean()
-        df["atr"] = self._atr(df, period=self.atr_period)
         
         today = df.index[-1].date()
         today_df = df[df.index.date == today]
         
-        if len(today_df) < 2:
-            return []  # Need at least two candles today to check slope/breakout
-            
-        # 1. Price opened above/below CPR
-        first_open = float(today_df["open"].iloc[0])
-        opened_above = first_open > cpr_max
-        opened_below = first_open < cpr_min
-        
-        # 2. Price remains above/below CPR
-        remains_above = today_df["low"].min() > cpr_max
-        remains_below = today_df["high"].max() < cpr_min
-        
-        # 3. Latest values
-        curr_close = float(df["close"].iloc[-1])
-        curr_high = float(df["high"].iloc[-1])
-        curr_low = float(df["low"].iloc[-1])
-        curr_volume = float(df["volume"].iloc[-1])
-        curr_vwap = float(df["vwap"].iloc[-1])
-        
-        # EMA Slope (computed over last 3 candles)
-        ema_slope_up = df["ema"].iloc[-1] > df["ema"].iloc[-2] and df["ema"].iloc[-2] > df["ema"].iloc[-3]
-        ema_slope_down = df["ema"].iloc[-1] < df["ema"].iloc[-2] and df["ema"].iloc[-2] < df["ema"].iloc[-3]
-        
-        # Recent swing high/low lookback (excluding current candle)
-        lookback = min(20, len(df) - 1)
-        recent_closes = df.iloc[-lookback-1:-1]
-        swing_high = float(recent_closes["high"].max())
-        swing_low = float(recent_closes["low"].min())
-        
-        # Breakout / Breakdown
-        breakout = curr_close > swing_high
-        breakdown = curr_close < swing_low
-        
-        # Volume check
-        vol_check = curr_volume > (df["vol_ma"].iloc[-1] * self.volume_multiplier)
-        
-        # If CPR is wide, require stronger volume for breakout
-        if is_wide:
-            vol_check = curr_volume > (df["vol_ma"].iloc[-1] * self.volume_multiplier * 1.5)
-            
-        # Fallback for Index Spot trading (like NIFTY) which lacks volume and VWAP
-        is_index = symbol.upper() in ("NIFTY", "NIFTY 50", "NIFTY_50", "BANKNIFTY", "FINNIFTY") or df["volume"].sum() == 0
-        if is_index:
-            vol_check = True  # Bypass volume check as volume is always 0
-            curr_vwap = df["ema"].iloc[-1]  # Fallback to EMA 20 instead of VWAP
-            
-        # Check trading window (9:20 AM - 2:45 PM)
-        curr_time = df.index[-1].time()
-        start_trade_time = datetime.time(9, 20)
-        end_trade_time = datetime.time(14, 45)
-        
-        time_allows_entry = start_trade_time <= curr_time <= end_trade_time
-        if not time_allows_entry:
+        # We need at least 3 completed candles today (completing 9:15-9:30 range)
+        # to establish the 15-minute bias candle
+        if len(today_df) < 3:
             return []
             
-        # Buy CE (LONG) Conditions
-        buy_ce = (
-            opened_above and
-            remains_above and
-            curr_close > curr_vwap and
-            ema_slope_up and
-            breakout and
-            vol_check
-        )
+        # First 15-minute close is the close of the 3rd 5-minute candle of the day
+        first_15m_close = float(today_df["close"].iloc[2])
         
-        # Buy PE (SHORT) Conditions
-        buy_pe = (
-            opened_below and
-            remains_below and
-            curr_close < curr_vwap and
-            ema_slope_down and
-            breakdown and
-            vol_check
-        )
+        bullish_bias = first_15m_close > cpr_max
+        bearish_bias = first_15m_close < cpr_min
         
-        # Confidence multiplier
-        confidence = 0.8 if is_narrow else 0.5
+        if not bullish_bias and not bearish_bias:
+            return []  # No directional trade bias established today
+
+        # Check trading time window for entries (9:30 AM to 3:00 PM IST)
+        curr_time = df.index[-1].time()
+        import datetime
+        start_trade_time = datetime.time(9, 30)
+        end_trade_time = datetime.time(15, 0)
+        
+        if not (start_trade_time <= curr_time <= end_trade_time):
+            return []
+            
+        curr_close = float(df["close"].iloc[-1])
+        curr_ema = float(df["ema"].iloc[-1])
+        prev_high = float(df["high"].iloc[-2])
+        prev_low = float(df["low"].iloc[-2])
+        
+        buy_ce = bullish_bias and curr_close > curr_ema and curr_close > prev_high
+        buy_pe = bearish_bias and curr_close < curr_ema and curr_close < prev_low
         
         if buy_ce:
-            if self.stop_loss_type == "atr":
-                sl_dist = float(df["atr"].iloc[-1]) * self.atr_multiplier
-                stop_loss = curr_close - sl_dist
-            else:
-                # Logical: below CPR or below breakout candle low
-                breakout_candle_low = float(df["low"].iloc[-1])
-                stop_loss = min(cpr_min, breakout_candle_low)
-                
+            signal_candle_low = float(df["low"].iloc[-1])
+            stop_loss = min(cpr_max, signal_candle_low)
+            
+            # Max spot risk check: cap at 2.0% of entry price
             if curr_close - stop_loss > curr_close * 0.02:
-                stop_loss = curr_close * 0.98  # Cap at 2% risk
+                stop_loss = curr_close * 0.98
                 
             target = curr_close + (curr_close - stop_loss) * self.risk_reward_ratio
+            
+            logger.info(
+                f"[CPR Strategy] Bullish Signal triggered on {symbol}. "
+                f"15m Close: {first_15m_close} > CPR Max: {cpr_max}. "
+                f"LTP: {curr_close}, EMA20: {curr_ema}, PrevHigh: {prev_high}. "
+                f"StopLoss: {stop_loss}, Target: {target}"
+            )
             
             return [Signal(
                 symbol=symbol,
@@ -214,25 +162,28 @@ class CPRIntradayStrategy:
                 stop_loss=round(stop_loss, 2),
                 target=round(target, 2),
                 fib_level=0.0,
-                swing_high=swing_high,
-                swing_low=swing_low,
+                swing_high=prev_high,
+                swing_low=prev_low,
                 timestamp=df.index[-1],
-                confidence=confidence
+                confidence=0.8
             )]
             
         elif buy_pe:
-            if self.stop_loss_type == "atr":
-                sl_dist = float(df["atr"].iloc[-1]) * self.atr_multiplier
-                stop_loss = curr_close + sl_dist
-            else:
-                # Logical: above CPR or above breakdown candle high
-                breakdown_candle_high = float(df["high"].iloc[-1])
-                stop_loss = max(cpr_max, breakdown_candle_high)
-                
+            signal_candle_high = float(df["high"].iloc[-1])
+            stop_loss = max(cpr_min, signal_candle_high)
+            
+            # Max spot risk check: cap at 2.0% of entry price
             if stop_loss - curr_close > curr_close * 0.02:
-                stop_loss = curr_close * 1.02  # Cap at 2% risk
+                stop_loss = curr_close * 1.02
                 
             target = curr_close - (stop_loss - curr_close) * self.risk_reward_ratio
+            
+            logger.info(
+                f"[CPR Strategy] Bearish Signal triggered on {symbol}. "
+                f"15m Close: {first_15m_close} < CPR Min: {cpr_min}. "
+                f"LTP: {curr_close}, EMA20: {curr_ema}, PrevLow: {prev_low}. "
+                f"StopLoss: {stop_loss}, Target: {target}"
+            )
             
             return [Signal(
                 symbol=symbol,
@@ -241,10 +192,10 @@ class CPRIntradayStrategy:
                 stop_loss=round(stop_loss, 2),
                 target=round(target, 2),
                 fib_level=0.0,
-                swing_high=swing_high,
-                swing_low=swing_low,
+                swing_high=prev_high,
+                swing_low=prev_low,
                 timestamp=df.index[-1],
-                confidence=confidence
+                confidence=0.8
             )]
             
         return []
