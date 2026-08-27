@@ -29,6 +29,15 @@ class CPRIntradayStrategy:
         self.risk_reward_ratio: float = float(cpr_cfg.get("risk_reward_ratio", 2.0))
         self.timeframe: str = strat.get("timeframe", "5minute")
         
+        # Tunable state machine parameters (should be optimized via backtesting)
+        self.breakout_buffer: float = float(cpr_cfg.get("breakout_buffer", 0.0))
+        self.bias_cutoff_time: str = cpr_cfg.get("bias_cutoff_time", "14:30")
+        
+        # State machine tracking variables
+        self.trend_bias = None  # None | "BULLISH" | "BEARISH"
+        self.breakout_candidate = None  # None | "BULLISH" | "BEARISH"
+        self.last_bias_date = None
+        
         from core.data_fetcher import KiteDataFetcher
         self.data_fetcher = KiteDataFetcher()
         self._cpr_cache = {}  # Cache lookup to prevent redundant daily downloads: (symbol, ref_date) -> (pivot, tc, bc)
@@ -107,23 +116,68 @@ class CPRIntradayStrategy:
         today = df.index[-1].date()
         today_df = df[df.index.date == today]
         
-        # We need at least 3 completed candles today (completing 9:15-9:30 range)
-        # to establish the 15-minute bias candle
-        if len(today_df) < 3:
-            return []
+        # We need completed candles today to establish state
+        # The currently forming candle is excluded (the last row of today_df)
+        completed_today_df = today_df.iloc[:-1]
+        
+        # Reset state at day transition
+        if self.last_bias_date != today:
+            self.trend_bias = None
+            self.breakout_candidate = None
+            self.last_bias_date = today
+
+        # Replay the state machine from the beginning of today's completed candles
+        # to ensure deterministic behavior on bot restarts or data reloads
+        self.trend_bias = None
+        self.breakout_candidate = None
+
+        import datetime
+        bias_start_time = datetime.time(9, 15)
+        try:
+            h_cut, m_cut = map(int, self.bias_cutoff_time.split(":"))
+            bias_cutoff_time = datetime.time(h_cut, m_cut)
+        except Exception:
+            bias_cutoff_time = datetime.time(14, 30)
+
+        for idx, row in completed_today_df.iterrows():
+            # First confirmed breakout wins and locks for the rest of the day
+            if self.trend_bias is not None:
+                continue
+
+            candle_time = idx.time()
+            # Only allow establishing a NEW bias candidate within the time window
+            if not (bias_start_time <= candle_time <= bias_cutoff_time):
+                self.breakout_candidate = None
+                continue
+
+            close_val = float(row["close"])
             
-        # First 15-minute close is the close of the 3rd 5-minute candle of the day
-        first_15m_close = float(today_df["close"].iloc[2])
-        
-        bullish_bias = first_15m_close > cpr_max
-        bearish_bias = first_15m_close < cpr_min
-        
-        if not bullish_bias and not bearish_bias:
-            return []  # No directional trade bias established today
+            # Tunable buffer check to avoid noise breakouts
+            is_above = close_val > cpr_max + self.breakout_buffer
+            is_below = close_val < cpr_min - self.breakout_buffer
+
+            if is_above:
+                if self.breakout_candidate == "BULLISH":
+                    self.trend_bias = "BULLISH"
+                    self.breakout_candidate = None
+                else:
+                    self.breakout_candidate = "BULLISH"
+            elif is_below:
+                if self.breakout_candidate == "BEARISH":
+                    self.trend_bias = "BEARISH"
+                    self.breakout_candidate = None
+                else:
+                    self.breakout_candidate = "BEARISH"
+            else:
+                # Fails to confirm on the next candle -> reset candidate
+                self.breakout_candidate = None
+
+        # If no bias has been established and locked, we do not trade today
+        if self.trend_bias is None:
+            return []
 
         # Check trading time window for entries (9:30 AM to 3:00 PM IST)
         curr_time = df.index[-1].time()
-        import datetime
         start_trade_time = datetime.time(9, 30)
         end_trade_time = datetime.time(15, 0)
         
@@ -135,8 +189,8 @@ class CPRIntradayStrategy:
         prev_high = float(df["high"].iloc[-2])
         prev_low = float(df["low"].iloc[-2])
         
-        buy_ce = bullish_bias and curr_close > curr_ema and curr_close > prev_high
-        buy_pe = bearish_bias and curr_close < curr_ema and curr_close < prev_low
+        buy_ce = (self.trend_bias == "BULLISH") and curr_close > curr_ema and curr_close > prev_high
+        buy_pe = (self.trend_bias == "BEARISH") and curr_close < curr_ema and curr_close < prev_low
         
         if buy_ce:
             signal_candle_low = float(df["low"].iloc[-1])
@@ -150,7 +204,6 @@ class CPRIntradayStrategy:
             
             logger.info(
                 f"[CPR Strategy] Bullish Signal triggered on {symbol}. "
-                f"15m Close: {first_15m_close} > CPR Max: {cpr_max}. "
                 f"LTP: {curr_close}, EMA20: {curr_ema}, PrevHigh: {prev_high}. "
                 f"StopLoss: {stop_loss}, Target: {target}"
             )
@@ -180,7 +233,6 @@ class CPRIntradayStrategy:
             
             logger.info(
                 f"[CPR Strategy] Bearish Signal triggered on {symbol}. "
-                f"15m Close: {first_15m_close} < CPR Min: {cpr_min}. "
                 f"LTP: {curr_close}, EMA20: {curr_ema}, PrevLow: {prev_low}. "
                 f"StopLoss: {stop_loss}, Target: {target}"
             )
