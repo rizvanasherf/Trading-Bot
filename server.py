@@ -282,8 +282,10 @@ def run_scanning_loop():
                         return sym, None, None, None
 
                 if scan_tasks:
-                    with ThreadPoolExecutor(max_workers=min(len(scan_tasks), 15)) as executor:
-                        fetch_results = list(executor.map(fetch_task_data, scan_tasks))
+                    # Execute scans sequentially to ensure time.sleep(0.35) staggers requests correctly
+                    fetch_results = []
+                    for task in scan_tasks:
+                        fetch_results.append(fetch_task_data(task))
 
                 for sym, ltp, df_hist, strat_inst in fetch_results:
                     if ltp is None or df_hist is None or df_hist.empty or strat_inst is None:
