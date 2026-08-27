@@ -90,10 +90,26 @@ class KiteDataFetcher:
                 base_price=MOCK_BASE_PRICES.get(symbol.upper(), 1000.0),
             )
 
+        # Check if index spot symbol to bypass Angel One (which doesn't support spot index candles)
+        sym_upper = symbol.upper().strip()
+        is_index_spot = sym_upper in ("NIFTY", "NIFTY 50", "NIFTY_50", "BANKNIFTY", "BANK NIFTY")
+        
+        cache_key = f"hist_{symbol}_{interval}_{days}"
+        if is_index_spot:
+            df = optimized_client.cache.get_df(cache_key)
+            if df is not None:
+                return df
+            df = self.get_historical_data_yfinance(symbol, interval, days)
+            if not df.empty:
+                optimized_client.cache.set_df(cache_key, df, 900)  # Cache for 15 mins
+            return df
+
         df = optimized_client.get_historical(symbol, interval, days)
         if df.empty:
             logger.warning(f"[Data Fetcher] Historical data from Angel One is empty/failed for {symbol}. Falling back to Yahoo Finance.")
             df = self.get_historical_data_yfinance(symbol, interval, days)
+            if not df.empty:
+                optimized_client.cache.set_df(cache_key, df, 900)  # Cache the fallback result
         return df
 
     def get_ltp(self, symbol: str) -> float:
