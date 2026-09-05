@@ -287,7 +287,7 @@ export default function App() {
   }, [fetchStatus, fetchDiagnostics, fetchMetrics, fetchPositions, fetchTrades]);
 
   useEffect(() => {
-    if (activeTab !== 'dashboard') return;
+    if (activeTab !== 'strategies') return;
     const timer = setInterval(() => {
       fetchChart();
     }, 30000);
@@ -296,7 +296,7 @@ export default function App() {
 
   // Load chart when tab is active or selected symbol changes
   useEffect(() => {
-    if (activeTab === 'dashboard' && chartSymbol) {
+    if (activeTab === 'strategies' && chartSymbol) {
       fetchChart();
     }
   }, [activeTab, chartSymbol, fetchChart]);
@@ -528,11 +528,11 @@ export default function App() {
           </button>
           
           <button 
-            className={`nav-item ${activeTab === 'backtest' ? 'active' : ''}`}
-            onClick={() => setActiveTab('backtest')}
+            className={`nav-item ${activeTab === 'strategies' ? 'active' : ''}`}
+            onClick={() => setActiveTab('strategies')}
           >
-            <BarChart2 size={18} />
-            Backtest Simulator
+            <Activity size={18} />
+            Live Strategies
           </button>
           
           <button 
@@ -750,10 +750,138 @@ export default function App() {
                     {metrics.trades_count} / {metrics.trades_limit} Trades
                   </span>
                   <span className="live-metric-subtext">
-                    Win Rate: {metrics.formatted_win_rate} ({metrics.winners}W - {metrics.losers}L)
+                    Win Rate: {metrics.formatted_win_rate} ({metrics.winners}W/{metrics.losers}L)
                   </span>
                 </div>
               </div>
+            </div>
+
+            {/* System Overview & Active Controls Card on Dashboard */}
+            <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(255, 255, 255, 0.08)', marginTop: '20px' }}>
+              <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
+                <h3 className="panel-title" style={{ color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Shield size={18} style={{ color: '#00d2ff' }} />
+                  System Overview & Active Controls
+                </h3>
+                <button 
+                  className="btn btn-primary"
+                  style={{ fontSize: '12px', padding: '6px 14px' }}
+                  onClick={() => setActiveTab('strategies')}
+                >
+                  Go to Live Strategies →
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '14px 18px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                  <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600 }}>Execution Mode</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: status.trading_mode === 'live' ? '#ff1744' : '#00d2ff', marginTop: '6px', textTransform: 'uppercase' }}>
+                    {status.trading_mode || 'paper'} Trading
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '14px 18px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                  <div style={{ fontSize: '11px', color: '#8a90a6', textTransform: 'uppercase', fontWeight: 600 }}>Active Primary Strategy</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff', marginTop: '6px' }}>
+                    {config.strategy?.strategy_type === 'cpr_intraday' ? 'CPR Intraday Strategy' : (config.strategy?.strategy_type || 'orb').toUpperCase()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* TAB 2: Live Strategies & Market Charts */}
+        {activeTab === 'strategies' && (
+          <>
+            {/* Real-time Active Triggers & Strategy Diagnostics Panel */}
+            <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(41, 121, 255, 0.2)' }}>
+              <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
+                <h3 className="panel-title" style={{ color: '#2979ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Activity size={18} />
+                  Active Triggers
+                </h3>
+                <div style={{ fontSize: '12px', color: '#8a90a6' }}>
+                  Per-bar condition evaluations & real-time signal monitoring
+                </div>
+              </div>
+
+              {(!status.strategy_diagnostics || Object.keys(status.strategy_diagnostics).length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '24px 16px', color: '#8a90a6', fontSize: '13px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.06)' }}>
+                  Scanner idle or awaiting first scan cycle. Click <strong>Live Scanner: Start</strong> in the top header to begin real-time condition monitoring.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {Object.entries(status.strategy_diagnostics).map(([sym, diag]) => {
+                    const isBlocked = diag.can_trade_allowed === false;
+                    const isTriggered = diag.status && diag.status.startsWith('TRIGGERED');
+                    return (
+                      <div key={sym} style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '8px',
+                        padding: '12px 16px',
+                        border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.4)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <strong style={{ fontSize: '15px', color: '#ffffff' }}>{sym}</strong>
+                            <span style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.06)', padding: '2px 8px', borderRadius: '4px', color: '#8a90a6', textTransform: 'uppercase' }}>
+                              {diag.strategy || 'strategy'}
+                            </span>
+                            {diag.timestamp && (
+                              <span style={{ fontSize: '11px', color: '#6c7293' }}>{diag.timestamp}</span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            padding: '3px 10px',
+                            borderRadius: '6px',
+                            background: isTriggered ? 'rgba(0, 230, 118, 0.15)' : isBlocked ? 'rgba(255, 23, 68, 0.15)' : 'rgba(41, 121, 255, 0.12)',
+                            color: isTriggered ? '#00e676' : isBlocked ? '#ff1744' : '#2979ff',
+                            border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.3)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(41, 121, 255, 0.2)'}`
+                          }}>
+                            {isBlocked ? `Risk Gate Blocked: ${diag.can_trade_reason}` : diag.status}
+                          </div>
+                        </div>
+
+                        {/* Breakdown Pills */}
+                        {diag.conditions && Object.keys(diag.conditions).length > 0 && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                            {Object.entries(diag.conditions).map(([condKey, passed]) => (
+                              <span key={condKey} style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: passed ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 23, 68, 0.08)',
+                                color: passed ? '#00e676' : '#ff5252',
+                                border: `1px solid ${passed ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 23, 68, 0.2)'}`
+                              }}>
+                                {passed ? '✓' : '✗'} {condKey.replace('_', ' ')}
+                              </span>
+                            ))}
+                            {diag.vol_ratio && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                Vol Ratio: {diag.vol_ratio}x
+                              </span>
+                            )}
+                            {diag.rsi_15m && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                RSI 15m: {diag.rsi_15m}
+                              </span>
+                            )}
+                            {diag.vwap && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                VWAP: ₹{diag.vwap}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* CPR Options Status Panel */}
@@ -839,96 +967,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Real-time Strategy Condition Diagnostics & Triggers Panel */}
-            <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(41, 121, 255, 0.2)' }}>
-              <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
-                <h3 className="panel-title" style={{ color: '#2979ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Activity size={18} />
-                  Live Strategy Condition Diagnostics & Active Triggers
-                </h3>
-                <div style={{ fontSize: '12px', color: '#8a90a6' }}>
-                  Per-bar condition evaluations & risk gate monitoring
-                </div>
-              </div>
-
-              {(!status.strategy_diagnostics || Object.keys(status.strategy_diagnostics).length === 0) ? (
-                <div style={{ textAlign: 'center', padding: '24px 16px', color: '#8a90a6', fontSize: '13px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.06)' }}>
-                  Scanner idle or awaiting first scan cycle. Click <strong>Live Scanner: Start</strong> in the top header to begin real-time condition monitoring.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {Object.entries(status.strategy_diagnostics).map(([sym, diag]) => {
-                    const isBlocked = diag.can_trade_allowed === false;
-                    const isTriggered = diag.status && diag.status.startsWith('TRIGGERED');
-                    return (
-                      <div key={sym} style={{
-                        background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '8px',
-                        padding: '12px 16px',
-                        border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.4)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <strong style={{ fontSize: '15px', color: '#ffffff' }}>{sym}</strong>
-                            <span style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.06)', padding: '2px 8px', borderRadius: '4px', color: '#8a90a6', textTransform: 'uppercase' }}>
-                              {diag.strategy || 'strategy'}
-                            </span>
-                            {diag.timestamp && (
-                              <span style={{ fontSize: '11px', color: '#6c7293' }}>{diag.timestamp}</span>
-                            )}
-                          </div>
-                          <div style={{
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            padding: '3px 10px',
-                            borderRadius: '6px',
-                            background: isTriggered ? 'rgba(0, 230, 118, 0.15)' : isBlocked ? 'rgba(255, 23, 68, 0.15)' : 'rgba(41, 121, 255, 0.12)',
-                            color: isTriggered ? '#00e676' : isBlocked ? '#ff1744' : '#2979ff',
-                            border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.3)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(41, 121, 255, 0.2)'}`
-                          }}>
-                            {isBlocked ? `Risk Gate Blocked: ${diag.can_trade_reason}` : diag.status}
-                          </div>
-                        </div>
-
-                        {/* Breakdown Pills */}
-                        {diag.conditions && Object.keys(diag.conditions).length > 0 && (
-                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
-                            {Object.entries(diag.conditions).map(([condKey, passed]) => (
-                              <span key={condKey} style={{
-                                fontSize: '11px',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                background: passed ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 23, 68, 0.08)',
-                                color: passed ? '#00e676' : '#ff5252',
-                                border: `1px solid ${passed ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 23, 68, 0.2)'}`
-                              }}>
-                                {passed ? '✓' : '✗'} {condKey.replace('_', ' ')}
-                              </span>
-                            ))}
-                            {diag.vol_ratio && (
-                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
-                                Vol Ratio: {diag.vol_ratio}x
-                              </span>
-                            )}
-                            {diag.rsi_15m && (
-                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
-                                RSI 15m: {diag.rsi_15m}
-                              </span>
-                            )}
-                            {diag.vwap && (
-                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
-                                VWAP: ₹{diag.vwap}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             {/* Open Positions Grid */}
             <div className="card-panel">
               <div className="panel-header">
@@ -999,7 +1037,7 @@ export default function App() {
               <div className="chart-header">
                 <h3 className="panel-title">
                   <TrendingUp size={18} style={{ color: '#00e676' }} />
-                  Interactive Level Analysis
+                  Interactive Level Analysis & Market Charts
                 </h3>
                 
                 <select 
@@ -1027,289 +1065,6 @@ export default function App() {
               )}
             </div>
           </>
-        )}
-
-        {/* TAB 2: Historical Backtester */}
-        {activeTab === 'backtest' && (
-          <div className="backtest-layout">
-            <aside className="backtest-sidebar">
-              <h4 style={{ fontSize: '15px', fontWeight: 700 }}>Backtest Settings</h4>
-              
-              <div className="form-group">
-                <label>Strategy Type</label>
-                <select 
-                  className="input-control"
-                  value={btParams.strategy_type || "compare_all"}
-                  onChange={(e) => setBtParams({ ...btParams, strategy_type: e.target.value })}
-                >
-                  <option value="compare_all">Compare All Strategies</option>
-                  <option value="cpr_intraday">CPR Intraday Strategy</option>
-                  <option value="orb">Opening Range Breakout (ORB)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Symbol</label>
-                <select 
-                  className="input-control"
-                  value={btParams.symbol}
-                  onChange={(e) => setBtParams({ ...btParams, symbol: e.target.value })}
-                >
-                  {btParams.strategy_type === 'cpr_intraday' ? (
-                    <option value="NIFTY">NIFTY</option>
-                  ) : (
-                    config.strategy?.symbols?.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Timeframe</label>
-                <select 
-                  className="input-control"
-                  value={btParams.timeframe}
-                  onChange={(e) => setBtParams({ ...btParams, timeframe: e.target.value })}
-                >
-                  <option value="minute">1 Minute</option>
-                  <option value="3minute">3 Minute</option>
-                  <option value="5minute">5 Minute</option>
-                  <option value="15minute">15 Minute</option>
-                </select>
-              </div>
-              
-              <div className="form-group">
-                <label>Lookback Period (Days): {btParams.days}</label>
-                <input 
-                  type="range"
-                  min="5"
-                  max="120"
-                  step="5"
-                  value={btParams.days}
-                  onChange={(e) => setBtParams({ ...btParams, days: parseInt(e.target.value) })}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Starting Capital (₹)</label>
-                <input 
-                  type="number"
-                  className="input-control"
-                  value={btParams.capital}
-                  onChange={(e) => setBtParams({ ...btParams, capital: parseFloat(e.target.value) })}
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>Risk Per Trade (%): {btParams.risk.toFixed(1)}%</label>
-                <input 
-                  type="range"
-                  min="0.1"
-                  max="5.0"
-                  step="0.1"
-                  value={btParams.risk}
-                  onChange={(e) => setBtParams({ ...btParams, risk: parseFloat(e.target.value) })}
-                />
-              </div>
-              
-              <button 
-                className="btn btn-primary btn-block"
-                onClick={runBacktest}
-                disabled={btLoading}
-              >
-                {btLoading ? 'Running...' : 'Execute Simulator'}
-              </button>
-
-            </aside>
-            
-            <div className="backtest-results">
-              {btResults ? (
-                <>
-                  {btResults.isComparison ? (
-                    <>
-                      {/* Comparison Metrics Grid */}
-                      <div className="card-panel">
-                        <h3 className="panel-title" style={{ marginBottom: '15px' }}>Multi-Strategy Comparison Summary</h3>
-                        <div className="table-container">
-                          <table className="custom-table" style={{ width: '100%' }}>
-                            <thead>
-                              <tr>
-                                <th>Strategy</th>
-                                <th>Total Return</th>
-                                <th>Est. CAGR</th>
-                                <th>Sharpe Ratio</th>
-                                <th>Max Drawdown</th>
-                                <th>Win Rate</th>
-                                <th>Winners / Losers</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {Object.entries(btResults.strategies).map(([stratKey, data]) => {
-                                const labelMap = {
-                                  cpr_intraday: "CPR Intraday Strategy",
-                                  orb: "Opening Range Breakout (ORB)"
-                                };
-                                return (
-                                  <tr key={stratKey}>
-                                    <td style={{ fontWeight: 700 }}>{labelMap[stratKey]}</td>
-                                    <td style={{ fontWeight: 700, color: data.total_return >= 0 ? '#00e676' : '#ff1744' }}>
-                                      {data.total_return >= 0 ? '+' : ''}{(data.total_return * 100).toFixed(1)}%
-                                    </td>
-                                    <td>{(data.cagr * 100).toFixed(1)}%</td>
-                                    <td>{data.sharpe.toFixed(2)}</td>
-                                    <td style={{ color: '#ff1744' }}>-{(data.max_drawdown * 100).toFixed(1)}%</td>
-                                    <td>{(data.win_rate * 100).toFixed(1)}%</td>
-                                    <td>{data.winners} W / {data.losers} L</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
-                      {/* Multi-Strategy Equity curve chart */}
-                      <div className="card-panel">
-                        <h3 className="panel-title" style={{ marginBottom: '15px' }}>Overlapping Equity Curve Comparison</h3>
-                        <div className="chart-wrapper">
-                          <FibonacciChart chartData={{
-                            isComparison: true,
-                            comparison: {
-                              cpr_intraday: btResults.strategies.cpr_intraday?.equity_curve || [],
-                              orb: btResults.strategies.orb?.equity_curve || []
-                            }
-                          }} />
-                        </div>
-                        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '15px', fontSize: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#ffd54f', borderRadius: '2px' }}></span>
-                            <span>Fibonacci Pullback</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#2979ff', borderRadius: '2px' }}></span>
-                            <span>ORB Breakout</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#00e676', borderRadius: '2px' }}></span>
-                            <span>VWAP Pullback</span>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Standard metrics grid */}
-                      <div className="metrics-grid">
-                        <div className="metric-card">
-                          <div className="metric-title">Total Return</div>
-                          <div className={`metric-value ${btResults.total_return >= 0 ? 'green' : 'red'}`} style={{ color: btResults.total_return >= 0 ? '#00e676' : '#ff1744' }}>
-                            {btResults.total_return >= 0 ? '+' : ''}{(btResults.total_return * 100).toFixed(1)}%
-                          </div>
-                          <div className="metric-delta neutral">Capital: ₹{btResults.initial_capital.toLocaleString()} → ₹{btResults.final_equity.toLocaleString()}</div>
-                        </div>
-                        
-                        <div className="metric-card">
-                          <div className="metric-title">CAGR (Est.)</div>
-                          <div className={`metric-value ${btResults.cagr >= 0 ? 'green' : 'red'}`} style={{ color: btResults.cagr >= 0 ? '#00e676' : '#ff1744' }}>
-                            {btResults.cagr >= 0 ? '+' : ''}{(btResults.cagr * 100).toFixed(1)}%
-                          </div>
-                          <div className="metric-delta neutral">Sharpe Ratio: {btResults.sharpe.toFixed(2)}</div>
-                        </div>
-                        
-                        <div className="metric-card">
-                          <div className="metric-title">Max Drawdown</div>
-                          <div className="metric-value" style={{ color: '#ff1744' }}>
-                            -{(btResults.max_drawdown * 100).toFixed(1)}%
-                          </div>
-                          <div className="metric-delta neutral">Risk Controlled</div>
-                        </div>
-                        
-                        <div className="metric-card">
-                          <div className="metric-title">Win Rate</div>
-                          <div className="metric-value">{(btResults.win_rate * 100).toFixed(1)}%</div>
-                          <div className="metric-delta neutral">Profit Factor: {btResults.profit_factor.toFixed(2)}</div>
-                        </div>
-                      </div>
-
-                      {/* Equity curve chart */}
-                      <div className="card-panel">
-                        <h3 className="panel-title" style={{ marginBottom: '15px' }}>Equity Curve Performance</h3>
-                        <div className="chart-wrapper">
-                          <FibonacciChart chartData={{ candles: btResults.equity_curve.map(p => ({
-                            time: p.time,
-                            open: p.equity,
-                            high: p.equity,
-                            low: p.equity,
-                            close: p.equity
-                          })) }} />
-                        </div>
-                      </div>
-
-                      {/* Executed Trades Grid */}
-                      <div className="card-panel">
-                        <h3 className="panel-title" style={{ marginBottom: '15px' }}>Trades Execution Log</h3>
-                        {btResults.trades.length === 0 ? (
-                          <div style={{ textAlign: 'center', padding: '30px 0', color: '#8a90a6' }}>
-                            No trades executed in this backtest.
-                          </div>
-                        ) : (
-                          <div className="trades-card-list">
-                            {btResults.trades.map((t, idx) => (
-                              <div className="trade-card-item" key={idx}>
-                                <div className="trade-card-header">
-                                  <div className="trade-card-symbol-badge">
-                                    <span className="trade-card-symbol">{t.symbol}</span>
-                                    <span className={`badge ${t.direction === 'LONG' ? 'badge-green' : 'badge-red'}`}>
-                                      {t.direction}
-                                    </span>
-                                    <span className="trade-card-qty">Qty: {t.qty}</span>
-                                  </div>
-                                  <div 
-                                    className="trade-card-pnl" 
-                                    style={{ color: t.pnl >= 0 ? '#00e676' : '#ff1744' }}
-                                  >
-                                    {t.pnl >= 0 ? '+' : ''}₹{t.pnl.toFixed(2)}
-                                  </div>
-                                </div>
-
-                                <div className="trade-card-details">
-                                  <div className="trade-point">
-                                    <span className="trade-point-label">Entry Point</span>
-                                    <span className="trade-point-price">₹{t.entry_price.toFixed(2)}</span>
-                                    <span className="trade-point-time">{t.entry_time}</span>
-                                  </div>
-                                  <div className="trade-point">
-                                    <span className="trade-point-label">Exit Point</span>
-                                    <span className="trade-point-price">
-                                      {t.exit_price ? `₹${t.exit_price.toFixed(2)}` : '-'}
-                                    </span>
-                                    <span className="trade-point-time">{t.exit_time}</span>
-                                  </div>
-                                </div>
-
-                                <div className="trade-card-footer">
-                                  <span>Exit Reason</span>
-                                  <span style={{ fontWeight: 500, color: '#ffffff' }}>{t.exit_reason}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </>
-              ) : (
-                <div className="card-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8a90a6', textAlign: 'center', padding: '100px 0' }}>
-                  <div>
-                    <h4 style={{ color: '#ffffff', marginBottom: '8px' }}>Simulation Ready</h4>
-                    <p style={{ maxWidth: '400px', fontSize: '14px' }}>Adjust variables in the sidebar and run the backtest simulator to view returns, metrics, and trades.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         )}
 
         {/* TAB 3: Strategy Settings */}
