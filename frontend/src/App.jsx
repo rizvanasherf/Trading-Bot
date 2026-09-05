@@ -840,18 +840,22 @@ export default function App() {
             )}
 
             {/* Real-time Strategy Condition Diagnostics & Triggers Panel */}
-            {status.strategy_diagnostics && Object.keys(status.strategy_diagnostics).length > 0 && (
-              <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(41, 121, 255, 0.2)' }}>
-                <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
-                  <h3 className="panel-title" style={{ color: '#2979ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Activity size={18} />
-                    Live Strategy Condition Diagnostics & Active Triggers
-                  </h3>
-                  <div style={{ fontSize: '12px', color: '#8a90a6' }}>
-                    Per-bar condition evaluations & risk gate monitoring
-                  </div>
+            <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(41, 121, 255, 0.2)' }}>
+              <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
+                <h3 className="panel-title" style={{ color: '#2979ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Activity size={18} />
+                  Live Strategy Condition Diagnostics & Active Triggers
+                </h3>
+                <div style={{ fontSize: '12px', color: '#8a90a6' }}>
+                  Per-bar condition evaluations & risk gate monitoring
                 </div>
+              </div>
 
+              {(!status.strategy_diagnostics || Object.keys(status.strategy_diagnostics).length === 0) ? (
+                <div style={{ textAlign: 'center', padding: '24px 16px', color: '#8a90a6', fontSize: '13px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.06)' }}>
+                  Scanner idle or awaiting first scan cycle. Click <strong>Live Scanner: Start</strong> in the top header to begin real-time condition monitoring.
+                </div>
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {Object.entries(status.strategy_diagnostics).map(([sym, diag]) => {
                     const isBlocked = diag.can_trade_allowed === false;
@@ -922,8 +926,8 @@ export default function App() {
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Open Positions Grid */}
             <div className="card-panel">
