@@ -52,10 +52,4 @@ strategy:
   volume_multiplier: 1.3
   volume_period: 20
   vwap_filter: true
-vwap_pullback:
-  ema_period: 9
-  lookback_swings: 20
-  stop_loss_pct: 0.005
-  volume_multiplier: 1.2
-  volume_period: 20
-  vwap_buffer_pct: 0.0015
+

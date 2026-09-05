@@ -18,9 +18,9 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
-from core.strategy import FibonacciStrategy, Signal, Direction
+from core.strategy import Signal, Direction
 from core.orb_strategy import ORBStrategy
-from core.vwap_pullback_strategy import VWAPPullbackStrategy
+from core.cpr_strategy import CPRIntradayStrategy
 from utils.logger import logger
 
 
@@ -66,16 +66,11 @@ class Backtester:
     def __init__(self, config: dict):
         self.config = config
         strat_cfg = config.get("strategy", {})
-        strategy_type = strat_cfg.get("strategy_type", "fibonacci")
+        strategy_type = strat_cfg.get("strategy_type", "cpr_intraday")
         if strategy_type == "orb":
             self.strategy = ORBStrategy(config)
-        elif strategy_type == "vwap_pullback":
-            self.strategy = VWAPPullbackStrategy(config)
-        elif strategy_type == "cpr_intraday":
-            from core.cpr_strategy import CPRIntradayStrategy
-            self.strategy = CPRIntradayStrategy(config)
         else:
-            self.strategy = FibonacciStrategy(config)
+            self.strategy = CPRIntradayStrategy(config)
             
         risk = config.get("risk", {})
         self.initial_capital: float = risk.get("capital", 500_000)

@@ -25,9 +25,9 @@ from config.settings import settings
 from src.data.angel_connector import connector
 from src.data.optimized_client import optimized_client
 from core.data_fetcher import KiteDataFetcher
-from core.strategy import FibonacciStrategy, Direction
+from core.strategy import Direction
 from core.orb_strategy import ORBStrategy
-from core.vwap_pullback_strategy import VWAPPullbackStrategy
+from core.cpr_strategy import CPRIntradayStrategy
 from core.risk_manager import RiskManager
 from core.order_executor import OrderExecutor, Position
 from core.backtester import Backtester
@@ -52,8 +52,8 @@ CONFIG_PATH = Path("config/config.yaml")
 # Global instances
 global_config = {}
 data_fetcher: Optional[KiteDataFetcher] = None
-strategy: Optional[FibonacciStrategy] = None
-secondary_strategy: Optional[FibonacciStrategy] = None
+strategy: Optional[Any] = None
+secondary_strategy: Optional[Any] = None
 risk_manager: Optional[RiskManager] = None
 order_executor: Optional[OrderExecutor] = None
 
@@ -119,28 +119,16 @@ def init_trading_components():
     
     data_fetcher = KiteDataFetcher()
     strat_cfg = global_config.get("strategy", {})
-    strategy_type = strat_cfg.get("strategy_type", "fibonacci")
-    secondary_strategy_type = strat_cfg.get("secondary_strategy_type", "none")
+    strategy_type = strat_cfg.get("strategy_type", "cpr_intraday")
+    secondary_strategy_type = strat_cfg.get("secondary_strategy_type", "orb")
     
     if strategy_type == "orb":
         strategy = ORBStrategy(global_config)
-    elif strategy_type == "vwap_pullback":
-        strategy = VWAPPullbackStrategy(global_config)
-    elif strategy_type == "cpr_intraday":
-        from core.cpr_strategy import CPRIntradayStrategy
-        strategy = CPRIntradayStrategy(global_config)
     else:
-        strategy = FibonacciStrategy(global_config)
+        strategy = CPRIntradayStrategy(global_config)
         
-    if strategy_type == "cpr_intraday" and secondary_strategy_type != "none":
-        if secondary_strategy_type == "orb":
-            secondary_strategy = ORBStrategy(global_config)
-        elif secondary_strategy_type == "vwap_pullback":
-            secondary_strategy = VWAPPullbackStrategy(global_config)
-        elif secondary_strategy_type == "fibonacci":
-            secondary_strategy = FibonacciStrategy(global_config)
-        else:
-            secondary_strategy = None
+    if strategy_type == "cpr_intraday" and secondary_strategy_type == "orb":
+        secondary_strategy = ORBStrategy(global_config)
     else:
         secondary_strategy = None
     
@@ -889,8 +877,8 @@ def get_logs(lines: int = 40):
 @app.get("/api/chart/{symbol}")
 def get_chart_data(symbol: str):
     try:
-        strategy_type = global_config.get("strategy", {}).get("strategy_type", "fibonacci")
-        secondary_strategy_type = global_config.get("strategy", {}).get("secondary_strategy_type", "none")
+        strategy_type = global_config.get("strategy", {}).get("strategy_type", "cpr_intraday")
+        secondary_strategy_type = global_config.get("strategy", {}).get("secondary_strategy_type", "orb")
         
         active_strat_type = strategy_type
         active_strategy = strategy
@@ -920,21 +908,7 @@ def get_chart_data(symbol: str):
         sh_idx_val = None
         sl_idx_val = None
         
-        if active_strat_type == "fibonacci" and active_strategy is not None:
-            sh_res = active_strategy.find_swing_high(df_chart["high"])
-            sl_res = active_strategy.find_swing_low(df_chart["low"])
-            
-            if sh_res and sl_res:
-                sh_idx, sh_val = sh_res
-                sl_idx, sl_val = sl_res
-                direction = "LONG" if sl_idx < sh_idx else "SHORT"
-                fib = active_strategy.calculate_fib_levels(sh_val, sl_val, Direction.LONG if direction == "LONG" else Direction.SHORT)
-                fib_levels = {str(k): float(v) for k, v in fib.levels.items()}
-                fib_extensions = {str(k): float(v) for k, v in fib.extensions.items()}
-                sh_idx_val = sh_idx
-                sl_idx_val = sl_idx
-                
-        elif active_strat_type == "orb" and active_strategy is not None:
+        if active_strat_type == "orb" and active_strategy is not None:
             # Calculate ORH/ORL for the most recent day in historical df_chart
             last_day = df_chart.index[-1].date()
             df_day = df_chart[df_chart.index.date == last_day]
@@ -951,22 +925,6 @@ def get_chart_data(symbol: str):
                 sh_res = (0, orh)
                 sl_res = (0, orl)
                 
-        elif active_strat_type == "vwap_pullback" and active_strategy is not None:
-            vwap = active_strategy._calculate_vwap(df_chart)
-            ema = df_chart["close"].ewm(span=active_strategy.ema_period, adjust=False).mean()
-            
-            curr_vwap = float(vwap.iloc[-1])
-            curr_ema = float(ema.iloc[-1])
-            
-            fib_levels = {"VWAP": curr_vwap, "EMA9": curr_ema}
-            curr_close = float(df_chart["close"].iloc[-1])
-            # Default target for layout purposes
-            fib_extensions = {
-                "Target (1:2)": curr_close + (curr_close - curr_vwap) * 2
-            }
-            orh = curr_vwap
-            orl = curr_ema
-            
         elif active_strat_type == "cpr_intraday" and active_strategy is not None:
             vwap = active_strategy._calculate_vwap(df_chart)
             ema = df_chart["close"].ewm(span=active_strategy.ema_period, adjust=False).mean()
@@ -1107,7 +1065,7 @@ def run_backtest_endpoint(bt_params: dict):
 
         if strategy_type == "compare_all":
             results = {}
-            for s in ["fibonacci", "orb", "vwap_pullback"]:
+            for s in ["cpr_intraday", "orb"]:
                 results[s] = run_single_backtest(s)
             return {
                 "comparison": True,

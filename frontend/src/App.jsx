@@ -94,7 +94,8 @@ export default function App() {
       trailing_sl_distance_pct: 0.005
     },
     strategy: {
-      strategy_type: "fibonacci",
+      strategy_type: "cpr_intraday",
+      secondary_strategy_type: "orb",
       timeframe: "15minute",
       lookback_candles: 150,
       swing_threshold: 4,
@@ -430,7 +431,7 @@ export default function App() {
     setBtLoading(true);
     setBtResults(null);
     try {
-      const strategies = ["fibonacci", "orb", "vwap_pullback"];
+      const strategies = ["cpr_intraday", "orb"];
       const promises = strategies.map(async (stratType) => {
         const res = await fetch(`${API_BASE}/backtest`, {
           method: 'POST',
@@ -951,11 +952,9 @@ export default function App() {
                   value={btParams.strategy_type || "compare_all"}
                   onChange={(e) => setBtParams({ ...btParams, strategy_type: e.target.value })}
                 >
-                  <option value="compare_all">Compare All 3 Strategies</option>
-                  <option value="fibonacci">VWAP + Fibonacci Pullback</option>
-                  <option value="orb">Opening Range Breakout (ORB)</option>
-                  <option value="vwap_pullback">VWAP Pullback - Nifty 50</option>
+                  <option value="compare_all">Compare All Strategies</option>
                   <option value="cpr_intraday">CPR Intraday Strategy</option>
+                  <option value="orb">Opening Range Breakout (ORB)</option>
                 </select>
               </div>
 
@@ -1058,9 +1057,8 @@ export default function App() {
                             <tbody>
                               {Object.entries(btResults.strategies).map(([stratKey, data]) => {
                                 const labelMap = {
-                                  fibonacci: "VWAP + Fibonacci Pullback",
-                                  orb: "Opening Range Breakout (ORB)",
-                                  vwap_pullback: "VWAP Pullback - Nifty 50"
+                                  cpr_intraday: "CPR Intraday Strategy",
+                                  orb: "Opening Range Breakout (ORB)"
                                 };
                                 return (
                                   <tr key={stratKey}>
@@ -1088,9 +1086,8 @@ export default function App() {
                           <FibonacciChart chartData={{
                             isComparison: true,
                             comparison: {
-                              fibonacci: btResults.strategies.fibonacci.equity_curve,
-                              orb: btResults.strategies.orb.equity_curve,
-                              vwap_pullback: btResults.strategies.vwap_pullback.equity_curve
+                              cpr_intraday: btResults.strategies.cpr_intraday?.equity_curve || [],
+                              orb: btResults.strategies.orb?.equity_curve || []
                             }
                           }} />
                         </div>
@@ -1251,16 +1248,14 @@ export default function App() {
                   <label>Active Trading Strategy</label>
                   <select 
                     className="input-control"
-                    value={config.strategy.strategy_type || "fibonacci"}
+                    value={config.strategy.strategy_type || "cpr_intraday"}
                     onChange={(e) => setConfig({
                       ...config,
                       strategy: { ...config.strategy, strategy_type: e.target.value }
                     })}
                   >
-                    <option value="fibonacci">VWAP + Fibonacci Pullback</option>
-                    <option value="orb">Opening Range Breakout (ORB)</option>
-                    <option value="vwap_pullback">VWAP Pullback - Nifty 50</option>
                     <option value="cpr_intraday">CPR Intraday Strategy</option>
+                    <option value="orb">Opening Range Breakout (ORB)</option>
                   </select>
                 </div>
 
@@ -1269,16 +1264,14 @@ export default function App() {
                     <label>Secondary Stock Strategy</label>
                     <select 
                       className="input-control"
-                      value={config.strategy.secondary_strategy_type || "none"}
+                      value={config.strategy.secondary_strategy_type || "orb"}
                       onChange={(e) => setConfig({
                         ...config,
                         strategy: { ...config.strategy, secondary_strategy_type: e.target.value }
                       })}
                     >
                       <option value="none">None (Bypass Stock watchlist)</option>
-                      <option value="fibonacci">VWAP + Fibonacci Pullback</option>
                       <option value="orb">Opening Range Breakout (ORB)</option>
-                      <option value="vwap_pullback">VWAP Pullback - Stocks</option>
                     </select>
                   </div>
                 )}
@@ -1549,109 +1542,7 @@ export default function App() {
                   </>
                 )}
 
-                {config.strategy.strategy_type === 'vwap_pullback' && (
-                  <>
-                    <div className="form-group">
-                      <label>Candle Interval</label>
-                      <select 
-                        className="input-control"
-                        value={config.strategy.timeframe}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          strategy: { ...config.strategy, timeframe: e.target.value }
-                        })}
-                      >
-                        <option value="minute">1 Minute</option>
-                        <option value="5minute">5 Minute</option>
-                        <option value="15minute">15 Minute</option>
-                      </select>
-                    </div>
 
-                    <div className="form-group">
-                      <label>EMA Slope Period (EMA9)</label>
-                      <input 
-                        type="number" 
-                        className="input-control"
-                        value={config.vwap_pullback?.ema_period || 9}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, ema_period: parseInt(e.target.value) }
-                        })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>VWAP Pullback Buffer Size (%): {((config.vwap_pullback?.vwap_buffer_pct || 0.0015) * 100).toFixed(3)}%</label>
-                      <input 
-                        type="range"
-                        min="0.05"
-                        max="0.50"
-                        step="0.01"
-                        value={(config.vwap_pullback?.vwap_buffer_pct || 0.0015) * 100}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, vwap_buffer_pct: parseFloat(e.target.value) / 100.0 }
-                        })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Volume MA Period</label>
-                      <input 
-                        type="number" 
-                        className="input-control"
-                        value={config.vwap_pullback?.volume_period || 20}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, volume_period: parseInt(e.target.value) }
-                        })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Volume Confirmation Multiplier: {config.vwap_pullback?.volume_multiplier}x</label>
-                      <input 
-                        type="range"
-                        min="1.0"
-                        max="3.0"
-                        step="0.1"
-                        value={config.vwap_pullback?.volume_multiplier || 1.2}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, volume_multiplier: parseFloat(e.target.value) }
-                        })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Stop Loss Distance (%): {((config.vwap_pullback?.stop_loss_pct || 0.005) * 100).toFixed(2)}%</label>
-                      <input 
-                        type="range"
-                        min="0.1"
-                        max="2.0"
-                        step="0.1"
-                        value={(config.vwap_pullback?.stop_loss_pct || 0.005) * 100}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, stop_loss_pct: parseFloat(e.target.value) / 100.0 }
-                        })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>Swing Points Lookback (candles)</label>
-                      <input 
-                        type="number" 
-                        className="input-control"
-                        value={config.vwap_pullback?.lookback_swings || 20}
-                        onChange={(e) => setConfig({
-                          ...config,
-                          vwap_pullback: { ...config.vwap_pullback, lookback_swings: parseInt(e.target.value) }
-                        })}
-                      />
-                    </div>
-                  </>
-                )}
 
                 {config.strategy.strategy_type === 'cpr_intraday' && (
                   <>
