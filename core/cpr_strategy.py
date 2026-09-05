@@ -172,26 +172,69 @@ class CPRIntradayStrategy:
                 # Fails to confirm on the next candle -> reset candidate
                 self.breakout_candidate = None
 
+        # Initialize diagnostics container
+        self.last_diagnostics = {
+            "symbol": symbol,
+            "strategy": "cpr_intraday",
+            "timestamp": df.index[-1].strftime("%Y-%m-%d %H:%M:%S"),
+            "trend_bias": self.trend_bias or "NEUTRAL",
+            "breakout_candidate": self.breakout_candidate or "NONE",
+            "cpr_range": f"{round(cpr_min, 2)} - {round(cpr_max, 2)}",
+            "close": round(float(df["close"].iloc[-1]), 2),
+            "ema20": round(float(df["ema"].iloc[-1]), 2),
+            "conditions": {},
+            "status": "Scanning"
+        }
+
         # If no bias has been established and locked, we do not trade today
         if self.trend_bias is None:
+            candidate_str = f" (Candidate: {self.breakout_candidate})" if self.breakout_candidate else ""
+            self.last_diagnostics["status"] = f"Waiting for CPR 2-candle bias lock{candidate_str}"
+            logger.info(f"[CPR Eval] [{symbol}] {self.last_diagnostics['status']} | Range: {round(cpr_min, 2)}-{round(cpr_max, 2)}")
             return []
 
         # Check trading time window for entries (9:30 AM to 3:00 PM IST)
         curr_time = df.index[-1].time()
         start_trade_time = datetime.time(9, 30)
         end_trade_time = datetime.time(15, 0)
+        in_time_window = start_trade_time <= curr_time <= end_trade_time
         
-        if not (start_trade_time <= curr_time <= end_trade_time):
-            return []
-            
         curr_close = float(df["close"].iloc[-1])
         curr_ema = float(df["ema"].iloc[-1])
         prev_high = float(df["high"].iloc[-2])
         prev_low = float(df["low"].iloc[-2])
         
-        buy_ce = (self.trend_bias == "BULLISH") and curr_close > curr_ema and curr_close > prev_high
-        buy_pe = (self.trend_bias == "BEARISH") and curr_close < curr_ema and curr_close < prev_low
+        ema_pass = (curr_close > curr_ema) if self.trend_bias == "BULLISH" else (curr_close < curr_ema)
+        breakout_pass = (curr_close > prev_high) if self.trend_bias == "BULLISH" else (curr_close < prev_low)
+
+        self.last_diagnostics["conditions"] = {
+            "bias_locked": True,
+            "time_window": in_time_window,
+            "ema_filter": ema_pass,
+            "breakout_filter": breakout_pass
+        }
+
+        if not in_time_window:
+            self.last_diagnostics["status"] = f"Outside trading time window (09:30-15:00, current: {curr_time.strftime('%H:%M')})"
+            logger.info(f"[CPR Eval] [{symbol}] {self.last_diagnostics['status']}")
+            return []
+            
+        buy_ce = (self.trend_bias == "BULLISH") and ema_pass and breakout_pass
+        buy_pe = (self.trend_bias == "BEARISH") and ema_pass and breakout_pass
         
+        if not (buy_ce or buy_pe):
+            failing = []
+            if not ema_pass:
+                failing.append(f"EMA20 check (Close {curr_close:.1f} vs EMA {curr_ema:.1f})")
+            if not breakout_pass:
+                target_prev = prev_high if self.trend_bias == "BULLISH" else prev_low
+                failing.append(f"PrevBar breakout (Close {curr_close:.1f} vs Prev {'High' if self.trend_bias == 'BULLISH' else 'Low'} {target_prev:.1f})")
+            
+            fail_msg = " & ".join(failing) if failing else "No signal"
+            self.last_diagnostics["status"] = f"Bias {self.trend_bias} | Waiting on: {fail_msg}"
+            logger.info(f"[CPR Eval] [{symbol}] {self.last_diagnostics['status']}")
+            return []
+
         if buy_ce:
             signal_candle_low = float(df["low"].iloc[-1])
             stop_loss = min(cpr_max, signal_candle_low)
@@ -202,6 +245,7 @@ class CPRIntradayStrategy:
                 
             target = curr_close + (curr_close - stop_loss) * self.risk_reward_ratio
             
+            self.last_diagnostics["status"] = "TRIGGERED: BULLISH BUY CE"
             logger.info(
                 f"[CPR Strategy] Bullish Signal triggered on {symbol}. "
                 f"LTP: {curr_close}, EMA20: {curr_ema}, PrevHigh: {prev_high}. "
@@ -231,6 +275,7 @@ class CPRIntradayStrategy:
                 
             target = curr_close - (stop_loss - curr_close) * self.risk_reward_ratio
             
+            self.last_diagnostics["status"] = "TRIGGERED: BEARISH BUY PE"
             logger.info(
                 f"[CPR Strategy] Bearish Signal triggered on {symbol}. "
                 f"LTP: {curr_close}, EMA20: {curr_ema}, PrevLow: {prev_low}. "

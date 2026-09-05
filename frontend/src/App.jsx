@@ -839,6 +839,92 @@ export default function App() {
               </div>
             )}
 
+            {/* Real-time Strategy Condition Diagnostics & Triggers Panel */}
+            {status.strategy_diagnostics && Object.keys(status.strategy_diagnostics).length > 0 && (
+              <div className="card-panel" style={{ background: 'linear-gradient(135deg, rgba(16, 15, 22, 0.9) 0%, rgba(12, 12, 15, 0.95) 100%)', border: '1px solid rgba(41, 121, 255, 0.2)' }}>
+                <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
+                  <h3 className="panel-title" style={{ color: '#2979ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Activity size={18} />
+                    Live Strategy Condition Diagnostics & Active Triggers
+                  </h3>
+                  <div style={{ fontSize: '12px', color: '#8a90a6' }}>
+                    Per-bar condition evaluations & risk gate monitoring
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {Object.entries(status.strategy_diagnostics).map(([sym, diag]) => {
+                    const isBlocked = diag.can_trade_allowed === false;
+                    const isTriggered = diag.status && diag.status.startsWith('TRIGGERED');
+                    return (
+                      <div key={sym} style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        borderRadius: '8px',
+                        padding: '12px 16px',
+                        border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.4)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(255, 255, 255, 0.05)'}`
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <strong style={{ fontSize: '15px', color: '#ffffff' }}>{sym}</strong>
+                            <span style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.06)', padding: '2px 8px', borderRadius: '4px', color: '#8a90a6', textTransform: 'uppercase' }}>
+                              {diag.strategy || 'strategy'}
+                            </span>
+                            {diag.timestamp && (
+                              <span style={{ fontSize: '11px', color: '#6c7293' }}>{diag.timestamp}</span>
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            padding: '3px 10px',
+                            borderRadius: '6px',
+                            background: isTriggered ? 'rgba(0, 230, 118, 0.15)' : isBlocked ? 'rgba(255, 23, 68, 0.15)' : 'rgba(41, 121, 255, 0.12)',
+                            color: isTriggered ? '#00e676' : isBlocked ? '#ff1744' : '#2979ff',
+                            border: `1px solid ${isTriggered ? 'rgba(0, 230, 118, 0.3)' : isBlocked ? 'rgba(255, 23, 68, 0.3)' : 'rgba(41, 121, 255, 0.2)'}`
+                          }}>
+                            {isBlocked ? `Risk Gate Blocked: ${diag.can_trade_reason}` : diag.status}
+                          </div>
+                        </div>
+
+                        {/* Breakdown Pills */}
+                        {diag.conditions && Object.keys(diag.conditions).length > 0 && (
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                            {Object.entries(diag.conditions).map(([condKey, passed]) => (
+                              <span key={condKey} style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: passed ? 'rgba(0, 230, 118, 0.08)' : 'rgba(255, 23, 68, 0.08)',
+                                color: passed ? '#00e676' : '#ff5252',
+                                border: `1px solid ${passed ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255, 23, 68, 0.2)'}`
+                              }}>
+                                {passed ? '✓' : '✗'} {condKey.replace('_', ' ')}
+                              </span>
+                            ))}
+                            {diag.vol_ratio && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                Vol Ratio: {diag.vol_ratio}x
+                              </span>
+                            )}
+                            {diag.rsi_15m && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                RSI 15m: {diag.rsi_15m}
+                              </span>
+                            )}
+                            {diag.vwap && (
+                              <span style={{ fontSize: '11px', color: '#8a90a6', background: 'rgba(255, 255, 255, 0.03)', padding: '2px 8px', borderRadius: '4px' }}>
+                                VWAP: ₹{diag.vwap}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Open Positions Grid */}
             <div className="card-panel">
               <div className="panel-header">

@@ -84,6 +84,7 @@ scanning_active = load_scanner_state()
 scanner_thread: Optional[threading.Thread] = None
 scanner_stop_event = threading.Event()
 latest_cpr_data = None
+latest_strategy_diagnostics = {}
 
 def load_yaml_config() -> dict:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -282,12 +283,28 @@ def run_scanning_loop():
                     
                     try:
                         # Check circuit breakers for specific stock
-                        can_tr, _ = risk_manager.can_trade(sym, active_positions_count=len(order_executor.active_positions))
+                        can_tr, reason_tr = risk_manager.can_trade(sym, active_positions_count=len(order_executor.active_positions))
                         if not can_tr:
+                            logger.warning(f"[{sym}] Skipping strategy evaluation - Risk gate blocked: {reason_tr}")
+                            latest_strategy_diagnostics[sym] = {
+                                "symbol": sym,
+                                "strategy": strat_inst.__class__.__name__,
+                                "timestamp": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
+                                "can_trade_allowed": False,
+                                "can_trade_reason": reason_tr,
+                                "status": f"Blocked by Risk Gate: {reason_tr}"
+                            }
                             continue
                             
                         # Evaluate strategy signals
                         signals = strat_inst.generate_signals(sym, df_hist)
+                        
+                        # Store detailed per-condition strategy diagnostics
+                        if hasattr(strat_inst, "last_diagnostics") and strat_inst.last_diagnostics:
+                            diag = dict(strat_inst.last_diagnostics)
+                            diag["can_trade_allowed"] = True
+                            diag["can_trade_reason"] = "OK"
+                            latest_strategy_diagnostics[sym] = diag
                         if signals:
                             sig = signals[0]
                             open_syms = [p.symbol for p in order_executor.open_positions]
@@ -420,6 +437,7 @@ def get_status():
         "api_status": api_status,
         "last_checked": now_ist().strftime("%Y-%m-%d %H:%M:%S"),
         "cpr_data": latest_cpr_data,
+        "strategy_diagnostics": latest_strategy_diagnostics,
         "strategy_type": strategy_type,
         "secondary_strategy_type": secondary_strategy_type
     }
@@ -427,6 +445,11 @@ def get_status():
 @app.get("/api/diagnostics")
 def get_diagnostics():
     return optimized_client.api_stats()
+
+@app.get("/api/strategy-diagnostics")
+def get_strategy_diagnostics():
+    global latest_strategy_diagnostics
+    return latest_strategy_diagnostics
 
 @app.post("/api/scanner/start")
 def start_scanner():

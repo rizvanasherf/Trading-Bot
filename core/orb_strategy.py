@@ -109,23 +109,46 @@ class ORBStrategy:
         """
         Bar-by-bar evaluation to find breakouts on candle closes.
         """
-        if len(df) < self.warmup_period:
+        if df.empty or len(df) < self.warmup_period:
             return []
 
         # Get current active bar info
         curr_bar = df.iloc[-1]
         curr_time = df.index[-1]
         curr_date = curr_time.date()
-        
+
+        # Initialize diagnostics container
+        self.last_diagnostics = {
+            "symbol": symbol,
+            "strategy": "orb",
+            "timestamp": curr_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(curr_time, "strftime") else str(curr_time),
+            "orh": None,
+            "orl": None,
+            "range_pct": None,
+            "close": float(curr_bar["close"]),
+            "vol_ratio": None,
+            "rsi_15m": None,
+            "vwap": None,
+            "conditions": {},
+            "status": "Scanning"
+        }
+
         # Filter dataframe for the current active day
         df_day = df[df.index.date == curr_date]
         if df_day.empty or len(df_day) < 3:
+            self.last_diagnostics["status"] = f"Insufficient intraday candles ({len(df_day)} < 3)"
+            logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
             return []
 
         # 1. Calculate Opening Range High and Low
         orh, orl = self.calculate_opening_range(df_day)
         if orh is None or orl is None:
+            self.last_diagnostics["status"] = "Waiting for Opening Range (09:15-09:30 AM)"
+            logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
             return []
+
+        self.last_diagnostics["orh"] = round(orh, 2)
+        self.last_diagnostics["orl"] = round(orl, 2)
 
         # Make sure we have crossed the end boundary time (e.g. current bar starts at or after 09:30)
         try:
@@ -134,27 +157,35 @@ class ORBStrategy:
             end_t = pd.to_datetime("09:30", format="%H:%M").time()
             
         if curr_time.time() < end_t:
+            self.last_diagnostics["status"] = f"Waiting for market to cross 09:30 AM (current: {curr_time.time().strftime('%H:%M')})"
+            logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
             return []
 
         # 2. Enforce Range Quality Filters (skip if range is too narrow or too wide)
         range_size = orh - orl
         range_pct = range_size / (orl + 1e-9)
+        self.last_diagnostics["range_pct"] = round(range_pct * 100, 3)
+
         if range_pct < self.min_range_pct or range_pct > self.max_range_pct:
+            self.last_diagnostics["status"] = f"Range quality failed (OR range: {(range_pct*100):.2f}% outside [{self.min_range_pct*100:.1f}%, {self.max_range_pct*100:.1f}%])"
+            logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
             return []
 
         current_close = float(curr_bar["close"])
         current_volume = float(curr_bar["volume"])
-        avg_vol = float(df["volume"].rolling(self.volume_period).mean().iloc[-1])
+        avg_vol = float(df["volume"].rolling(self.volume_period).mean().iloc[-1]) if len(df) >= self.volume_period else 1.0
+        vol_ratio = current_volume / (avg_vol + 1e-9)
+        self.last_diagnostics["vol_ratio"] = round(vol_ratio, 2)
         
         # 3. Volume filter check
-        if current_volume < avg_vol * self.volume_multiplier:
-            return []
+        vol_pass = current_volume >= avg_vol * self.volume_multiplier
 
         # Calculate VWAP
         current_vwap = None
         if self.use_vwap_filter:
             vwap_series = self._calculate_vwap(df)
             current_vwap = float(vwap_series.iloc[-1])
+            self.last_diagnostics["vwap"] = round(current_vwap, 2)
 
         atr_series = self._atr(df)
         current_atr = float(atr_series.iloc[-1]) if not atr_series.empty else 1.0
@@ -164,19 +195,46 @@ class ORBStrategy:
 
         # Calculate 15m RSI filter
         rsi_15m = self._calculate_rsi_15m(df)
+        self.last_diagnostics["rsi_15m"] = round(rsi_15m, 1)
+
+        # Evaluate breakout direction checks
+        long_cross = prev_close <= orh and current_close > orh
+        short_cross = prev_close >= orl and current_close < orl
+        
+        rsi_long_pass = rsi_15m >= 55.0
+        rsi_short_pass = rsi_15m <= 45.0
+        vwap_long_pass = (current_vwap is None) or (current_close > current_vwap)
+        vwap_short_pass = (current_vwap is None) or (current_close < current_vwap)
+
+        self.last_diagnostics["conditions"] = {
+            "time_window": True,
+            "range_quality": True,
+            "volume_filter": vol_pass,
+            "rsi_filter": rsi_long_pass if current_close > orh else (rsi_short_pass if current_close < orl else False),
+            "vwap_filter": vwap_long_pass if current_close > orh else (vwap_short_pass if current_close < orl else False),
+            "crossover": long_cross or short_cross
+        }
 
         # 4. Check for Long Breakout (close crosses above ORH)
-        if prev_close <= orh and current_close > orh:
-            # RSI momentum check (RSI >= 55.0 to ensure strong upward momentum, no upper cap)
-            if rsi_15m < 55.0:
+        if long_cross:
+            if not vol_pass:
+                self.last_diagnostics["status"] = f"Breakout Above ORH | Failing Volume ({vol_ratio:.2f}x < {self.volume_multiplier:.1f}x req)"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
                 return []
-                
-            # VWAP Filter
-            if self.use_vwap_filter and current_vwap is not None and current_close <= current_vwap:
+            if not rsi_long_pass:
+                self.last_diagnostics["status"] = f"Breakout Above ORH | Failing RSI 15m ({rsi_15m:.1f} < 55.0 req)"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
+                return []
+            if not vwap_long_pass:
+                self.last_diagnostics["status"] = f"Breakout Above ORH | Failing VWAP (Close {current_close:.1f} <= VWAP {current_vwap:.1f})"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
                 return []
                 
             stop_loss = max(orl, current_close - 1.5 * current_atr)
             target = current_close + range_size * self.target_multiplier
+            
+            self.last_diagnostics["status"] = f"TRIGGERED: LONG BREAKOUT @ {current_close:.2f}"
+            logger.info(f"[ORB Strategy] LONG breakout triggered on {symbol} @ {current_close:.2f}")
             
             return [Signal(
                 symbol=symbol,
@@ -192,17 +250,25 @@ class ORBStrategy:
             )]
 
         # 5. Check for Short Breakout (close crosses below ORL)
-        if prev_close >= orl and current_close < orl:
-            # RSI momentum check (RSI <= 45.0 to ensure strong downward momentum, no lower cap)
-            if rsi_15m > 45.0:
+        if short_cross:
+            if not vol_pass:
+                self.last_diagnostics["status"] = f"Breakdown Below ORL | Failing Volume ({vol_ratio:.2f}x < {self.volume_multiplier:.1f}x req)"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
                 return []
-                
-            # VWAP Filter
-            if self.use_vwap_filter and current_vwap is not None and current_close >= current_vwap:
+            if not rsi_short_pass:
+                self.last_diagnostics["status"] = f"Breakdown Below ORL | Failing RSI 15m ({rsi_15m:.1f} > 45.0 req)"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
+                return []
+            if not vwap_short_pass:
+                self.last_diagnostics["status"] = f"Breakdown Below ORL | Failing VWAP (Close {current_close:.1f} >= VWAP {current_vwap:.1f})"
+                logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
                 return []
                 
             stop_loss = min(orh, current_close + 1.5 * current_atr)
             target = current_close - range_size * self.target_multiplier
+            
+            self.last_diagnostics["status"] = f"TRIGGERED: SHORT BREAKOUT @ {current_close:.2f}"
+            logger.info(f"[ORB Strategy] SHORT breakout triggered on {symbol} @ {current_close:.2f}")
             
             return [Signal(
                 symbol=symbol,
@@ -217,4 +283,8 @@ class ORBStrategy:
                 confidence=0.8
             )]
 
+        # If no breakout crossover on this exact bar
+        pos_str = "Above ORH" if current_close > orh else ("Below ORL" if current_close < orl else "Inside OR Range")
+        self.last_diagnostics["status"] = f"Price {current_close:.2f} {pos_str} (ORH: {orh:.2f}, ORL: {orl:.2f}) | Vol: {vol_ratio:.2f}x | RSI15m: {rsi_15m:.1f}"
+        logger.info(f"[ORB Eval] [{symbol}] {self.last_diagnostics['status']}")
         return []
